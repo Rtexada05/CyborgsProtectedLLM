@@ -297,6 +297,107 @@ class PolicyEngine:
         # Very low risk - always allow
         return "ALLOW"
     
+    async def score_risk(self, signals: Dict[str, Any], mode: str) -> tuple[int, str]:
+        """Score risk on 0-100 scale with mode-dependent weights"""
+        
+        # Base score calculation
+        base_score = 0
+        
+        # Prompt injection signals
+        if signals.get("prompt_injection_suspected", False):
+            base_score += 30
+        
+        # RAG injection signals
+        if signals.get("rag_injection_suspected", False):
+            base_score += 20
+        
+        # Tool abuse signals
+        if signals.get("tool_abuse_suspected", False):
+            base_score += 25
+        
+        # Encoding obfuscation
+        if signals.get("encoding_obfuscation", False):
+            base_score += 35
+        
+        # Pattern hits (each hit adds points)
+        pattern_hits = len(signals.get("pattern_hits", []))
+        base_score += min(pattern_hits * 5, 25)
+        
+        # Suspicious keywords (each keyword adds points)
+        suspicious_keywords = len(signals.get("suspicious_keywords", []))
+        base_score += min(suspicious_keywords * 3, 20)
+        
+        # Mode-dependent weight adjustment
+        mode_weights = {
+            "Off": 0.1,      # Very lenient
+            "Weak": 0.4,     # More lenient  
+            "Normal": 0.7,    # Standard
+            "Strong": 1.2       # Strict (amplifies score)
+        }
+        
+        weight = mode_weights.get(mode, 0.7)
+        final_score = int(min(base_score * weight, 100))
+        
+        # Map to risk level
+        if final_score >= 75:
+            risk_level = "CRITICAL"
+        elif final_score >= 50:
+            risk_level = "HIGH"
+        elif final_score >= 25:
+            risk_level = "MEDIUM"
+        else:
+            risk_level = "LOW"
+        
+        print(f"DEBUG: Risk scoring - Base: {base_score}, Weight: {weight}, Final: {final_score}, Level: {risk_level}")
+        return final_score, risk_level
+    
+    async def decide_action(self, risk_level: str, mode: str) -> tuple[str, str]:
+        """Decide action based on risk level and mode"""
+        
+        decision_rules = {
+            "Off": {
+                "LOW": ("ALLOW", "Request allowed in Off mode"),
+                "MEDIUM": ("ALLOW", "Request allowed in Off mode"),
+                "HIGH": ("SANITIZE", "High risk sanitized in Off mode"),
+                "CRITICAL": ("BLOCK", "Critical risk blocked even in Off mode")
+            },
+            "Weak": {
+                "LOW": ("ALLOW", "Low risk allowed in Weak mode"),
+                "MEDIUM": ("SANITIZE", "Medium risk sanitized in Weak mode"),
+                "HIGH": ("SANITIZE", "High risk sanitized in Weak mode"),
+                "CRITICAL": ("BLOCK", "Critical risk blocked in Weak mode")
+            },
+            "Normal": {
+                "LOW": ("ALLOW", "Low risk allowed in Normal mode"),
+                "MEDIUM": ("SANITIZE", "Medium risk sanitized in Normal mode"),
+                "HIGH": ("SANITIZE", "High risk sanitized in Normal mode"),
+                "CRITICAL": ("BLOCK", "Critical risk blocked in Normal mode")
+            },
+            "Strong": {
+                "LOW": ("SANITIZE", "Low risk sanitized in Strong mode"),
+                "MEDIUM": ("SANITIZE", "Medium risk sanitized in Strong mode"),
+                "HIGH": ("BLOCK", "High risk blocked in Strong mode"),
+                "CRITICAL": ("BLOCK", "Critical risk blocked in Strong mode")
+            }
+        }
+        
+        decision, reason = decision_rules.get(mode, {}).get(risk_level, ("BLOCK", "Unknown mode/risk combination"))
+        print(f"DEBUG: Decision - Mode: {mode}, Risk: {risk_level}, Action: {decision}")
+        return decision, reason
+    
+    async def needs_sanitization(self, signals: Dict[str, Any], risk_level: str, mode: str) -> bool:
+        """Determine if content needs sanitization"""
+        
+        # Direct sanitization rules
+        if mode == "Strong":
+            return risk_level in ["LOW", "MEDIUM"]
+        elif mode == "Normal":
+            return risk_level in ["MEDIUM", "HIGH"]
+        elif mode == "Weak":
+            return risk_level in ["MEDIUM", "HIGH"]
+        else:  # Off mode
+            return risk_level in ["HIGH", "CRITICAL"]
+    
     def _get_adaptive_thresholds(self, mode: SecurityMode) -> Dict[str, float]:
         """Get adaptive thresholds based on security mode"""
         
@@ -358,3 +459,104 @@ class PolicyEngine:
         
         else:  # ALLOW
             return "Request approved - no significant risks detected"
+    
+    async def score_risk(self, signals: Dict[str, Any], mode: str) -> tuple[int, str]:
+        """Score risk on 0-100 scale with mode-dependent weights"""
+        
+        # Base score calculation
+        base_score = 0
+        
+        # Prompt injection signals
+        if signals.get("prompt_injection_suspected", False):
+            base_score += 30
+        
+        # RAG injection signals
+        if signals.get("rag_injection_suspected", False):
+            base_score += 20
+        
+        # Tool abuse signals
+        if signals.get("tool_abuse_suspected", False):
+            base_score += 25
+        
+        # Encoding obfuscation
+        if signals.get("encoding_obfuscation", False):
+            base_score += 35
+        
+        # Pattern hits (each hit adds points)
+        pattern_hits = len(signals.get("pattern_hits", []))
+        base_score += min(pattern_hits * 5, 25)
+        
+        # Suspicious keywords (each keyword adds points)
+        suspicious_keywords = len(signals.get("suspicious_keywords", []))
+        base_score += min(suspicious_keywords * 3, 20)
+        
+        # Mode-dependent weight adjustment
+        mode_weights = {
+            "Off": 0.1,      # Very lenient
+            "Weak": 0.4,     # More lenient  
+            "Normal": 0.7,    # Standard
+            "Strong": 1.2       # Strict (amplifies score)
+        }
+        
+        weight = mode_weights.get(mode, 0.7)
+        final_score = int(min(base_score * weight, 100))
+        
+        # Map to risk level
+        if final_score >= 75:
+            risk_level = "CRITICAL"
+        elif final_score >= 50:
+            risk_level = "HIGH"
+        elif final_score >= 25:
+            risk_level = "MEDIUM"
+        else:
+            risk_level = "LOW"
+        
+        print(f"DEBUG: Risk scoring - Base: {base_score}, Weight: {weight}, Final: {final_score}, Level: {risk_level}")
+        return final_score, risk_level
+    
+    async def decide_action(self, risk_level: str, mode: str) -> tuple[str, str]:
+        """Decide action based on risk level and mode"""
+        
+        decision_rules = {
+            "Off": {
+                "LOW": ("ALLOW", "Request allowed in Off mode"),
+                "MEDIUM": ("ALLOW", "Request allowed in Off mode"),
+                "HIGH": ("SANITIZE", "High risk sanitized in Off mode"),
+                "CRITICAL": ("BLOCK", "Critical risk blocked even in Off mode")
+            },
+            "Weak": {
+                "LOW": ("ALLOW", "Low risk allowed in Weak mode"),
+                "MEDIUM": ("SANITIZE", "Medium risk sanitized in Weak mode"),
+                "HIGH": ("SANITIZE", "High risk sanitized in Weak mode"),
+                "CRITICAL": ("BLOCK", "Critical risk blocked in Weak mode")
+            },
+            "Normal": {
+                "LOW": ("ALLOW", "Low risk allowed in Normal mode"),
+                "MEDIUM": ("SANITIZE", "Medium risk sanitized in Normal mode"),
+                "HIGH": ("SANITIZE", "High risk sanitized in Normal mode"),
+                "CRITICAL": ("BLOCK", "Critical risk blocked in Normal mode")
+            },
+            "Strong": {
+                "LOW": ("SANITIZE", "Low risk sanitized in Strong mode"),
+                "MEDIUM": ("SANITIZE", "Medium risk sanitized in Strong mode"),
+                "HIGH": ("BLOCK", "High risk blocked in Strong mode"),
+                "CRITICAL": ("BLOCK", "Critical risk blocked in Strong mode")
+            }
+        }
+        
+        decision, reason = decision_rules.get(mode, {}).get(risk_level, ("BLOCK", "Unknown mode/risk combination"))
+        print(f"DEBUG: Decision - Mode: {mode}, Risk: {risk_level}, Action: {decision}")
+        return decision, reason
+    
+    async def needs_sanitization(self, signals: Dict[str, Any], risk_level: str, mode: str) -> bool:
+        """Determine if content needs sanitization"""
+        
+        # Direct sanitization rules
+        if mode == "Strong":
+            return risk_level in ["LOW", "MEDIUM"]
+        elif mode == "Normal":
+            return risk_level in ["MEDIUM", "HIGH"]
+        elif mode == "Weak":
+            return risk_level in ["MEDIUM", "HIGH"]
+        else:  # Off mode
+            return risk_level in ["HIGH", "CRITICAL"]

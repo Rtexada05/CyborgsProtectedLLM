@@ -28,43 +28,91 @@ class MetricsLogger:
         self.start_time = datetime.now()
         self._lock = asyncio.Lock()
 
-    async def log_event(self, event_data: Dict[str, Any]) -> None:
-        """Log an event with timestamp"""
+    async def log_event(self, event_type: str, trace_id: str, user_id: str, details: Dict[str, Any]):
+        """Log an event with trace tracking"""
         
         async with self._lock:
-            # Add timestamp if not present
-            if "timestamp" not in event_data:
-                event_data["timestamp"] = datetime.now()
+            event = {
+                "trace_id": trace_id,
+                "timestamp": datetime.now().isoformat(),
+                "user_id": user_id,
+                "event_type": event_type,
+                "details": details
+            }
             
-            # Add to events list
-            self.events.append(event_data)
+            self.events.append(event)
             
             # Update metrics
-            await self._update_metrics(event_data)
-    
-    async def _update_metrics(self, event_data: Dict[str, Any]) -> None:
-        """Update metrics based on event data"""
-        
-        event_type = event_data.get("event_type", "")
-        
-        if event_type == "chat_request":
             self.metrics["total_requests"] += 1
             
-            decision = event_data.get("decision", "")
-            if decision == "BLOCK":
-                self.metrics["blocked_requests"] += 1
-            elif decision == "SANITIZE":
-                self.metrics["sanitized_requests"] += 1
-            elif decision == "ALLOW":
-                self.metrics["allowed_requests"] += 1
+            if event_type == "risk_scored":
+                if details.get("risk_level") == "HIGH":
+                    self.metrics["high_risk_requests"] += 1
+                elif details.get("risk_level") == "MEDIUM":
+                    self.metrics["medium_risk_requests"] += 1
+                else:
+                    self.metrics["low_risk_requests"] += 1
             
-            risk_level = event_data.get("risk_level", "")
-            if risk_level == "HIGH":
-                self.metrics["high_risk_requests"] += 1
-            elif risk_level == "MEDIUM":
-                self.metrics["medium_risk_requests"] += 1
-            elif risk_level == "LOW":
-                self.metrics["low_risk_requests"] += 1
+            elif event_type == "decision_made":
+                decision = details.get("decision", "ALLOW")
+                if decision == "BLOCK":
+                    self.metrics["blocked_requests"] += 1
+                elif decision == "SANITIZE":
+                    self.metrics["sanitized_requests"] += 1
+                else:
+                    self.metrics["allowed_requests"] += 1
+    
+    async def log_decision(self, trace_id: str, user_id: str, mode: str, risk_score: int, risk_level: str, decision: str, reason: str):
+        """Log a decision with full details"""
+        
+        async with self._lock:
+            decision_record = {
+                "trace_id": trace_id,
+                "timestamp": datetime.now().isoformat(),
+                "user_id": user_id,
+                "mode": mode,
+                "risk_score": risk_score,
+                "risk_level": risk_level,
+                "decision": decision,
+                "reason": reason
+            }
+            
+            # Store in decisions list (separate from events)
+            if not hasattr(self, 'decisions'):
+                self.decisions = []
+            
+            self.decisions.append(decision_record)
+    
+    async def get_events(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get recent events"""
+        
+        async with self._lock:
+            # Get most recent events
+            recent_events = list(self.events)[-limit:]
+            
+            # Convert to dict format
+            return [
+                {
+                    "trace_id": event["trace_id"],
+                    "timestamp": event["timestamp"],
+                    "user_id": event["user_id"],
+                    "event_type": event["event_type"],
+                    "details": event["details"]
+                }
+                for event in recent_events
+            ]
+    
+    async def get_decisions(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get recent decisions"""
+        
+        async with self._lock:
+            if not hasattr(self, 'decisions'):
+                self.decisions = []
+            
+            # Get most recent decisions
+            recent_decisions = list(self.decisions)[-limit:]
+            
+            return recent_decisions
     
     async def get_recent_events(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Get recent events"""

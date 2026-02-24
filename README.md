@@ -55,6 +55,8 @@ Open your browser and navigate to `http://localhost:8000`
 - `POST /admin/mode` - Configure security mode
 - `GET /admin/mode` - Get current security mode
 - `GET /admin/events` - View recent security events (configurable limit)
+- `GET /admin/decisions` - View recent security decisions (configurable limit)
+- `GET /admin/events/old` - Legacy events endpoint
 
 ## Security Modes
 
@@ -94,29 +96,44 @@ cyborgs_protected_chat/
 ├── backend/
 │   ├── app/
 │   │   ├── api/                    # API routes and endpoints
+│   │   │   ├── __init__.py
 │   │   │   └── routes/            # Health, chat, admin endpoints
+│   │   │       ├── __init__.py
+│   │   │       ├── admin.py       # Admin endpoints (mode, events, decisions)
+│   │   │       ├── chat.py         # Chat endpoint with protection
+│   │   │       └── health.py       # Health check endpoint
+│   │   ├── controller/             # Request orchestration
+│   │   │   ├── __init__.py
+│   │   │   └── defense_controller.py # Main defense pipeline
 │   │   ├── core/                   # Configuration and security
+│   │   │   ├── __init__.py
 │   │   │   ├── config.py          # Settings management
 │   │   │   ├── logging_config.py   # Logging setup
 │   │   │   └── security_modes.py  # Security mode definitions
-│   │   ├── controller/             # Request orchestration
-│   │   │   └── defense_controller.py # Main defense pipeline
 │   │   ├── models/                 # Pydantic schemas
+│   │   │   ├── __init__.py
 │   │   │   └── schemas.py         # Request/response models
 │   │   ├── services/               # Business logic and security
+│   │   │   ├── __init__.py
 │   │   │   ├── input_content_checker.py # Enhanced injection detection
-│   │   │   ├── policy_engine.py          # Risk assessment and decisions
-│   │   │   ├── steganography_detector.py # Hidden content detection
-│   │   │   ├── rag_manager.py             # RAG context handling
-│   │   │   ├── rag_content_validator.py  # RAG content validation
-│   │   │   ├── tool_gatekeeper.py        # Tool access control
 │   │   │   ├── llm_service.py            # LLM interface (stub)
-│   │   │   └── metrics_logger.py         # Event tracking and logging
+│   │   │   ├── metrics_logger.py         # Event tracking and logging
+│   │   │   ├── mode_manager.py           # Global security mode management
+│   │   │   ├── policy_engine.py          # Risk assessment and decisions
+│   │   │   ├── rag_content_validator.py  # RAG content validation
+│   │   │   ├── rag_manager.py             # RAG context handling
+│   │   │   ├── steganography_detector.py # Hidden content detection
+│   │   │   └── tool_gatekeeper.py        # Tool access control
 │   │   ├── utils/                  # Utilities and helpers
+│   │   │   ├── __init__.py
 │   │   │   └── text_sanitizer.py  # Advanced content sanitization
+│   │   ├── __init__.py
 │   │   └── main.py                 # FastAPI application entry point
+│   ├── test_score_risk.py         # Policy engine debugging script
 │   └── tests/                       # Test suite
-│       └── test_health.py          # Health endpoint tests
+│       ├── __init__.py
+│       ├── test_health.py          # Health endpoint tests
+│       └── test_chat_security.py   # Comprehensive security tests
 ├── README.md
 ├── .gitignore
 ├── .env.example
@@ -137,6 +154,23 @@ The system uses a modular defense-in-depth approach:
 6. **ToolGatekeeper** controls tool access and prevents abuse
 7. **LLMService** interfaces with language models (stub for Hugging Face integration)
 8. **MetricsLogger** tracks all security events and decisions
+9. **ModeManager** provides centralized global security mode management
+
+### Global Mode Management
+
+The system features a centralized `ModeManager` that:
+- Maintains a single global security mode across all requests
+- Overrides per-request mode settings for consistent security
+- Provides thread-safe mode switching
+- Supports runtime mode configuration via admin endpoints
+
+### FastAPI Application Structure
+
+- **Lifespan Management**: Startup/shutdown events with proper logging
+- **CORS Middleware**: Configurable cross-origin resource sharing
+- **Global Exception Handling**: Centralized error processing
+- **Auto-documentation**: Built-in OpenAPI/Swagger at `/docs` and ReDoc at `/redoc`
+- **Router Organization**: Modular route separation by functionality
 
 ### Signal Types Detected
 
@@ -177,6 +211,16 @@ curl -X POST "http://localhost:8000/admin/mode" \
 ### Event Monitoring
 ```bash
 curl -X GET "http://localhost:8000/admin/events?limit=10"
+```
+
+### Decision Monitoring
+```bash
+curl -X GET "http://localhost:8000/admin/decisions?limit=10"
+```
+
+### Get Current Security Mode
+```bash
+curl -X GET "http://localhost:8000/admin/mode"
 ```
 
 ## Attack Examples (Blocked)
@@ -220,11 +264,36 @@ pytest backend/tests/
 ```
 
 ### Test Coverage
-- Health endpoint functionality
-- Security mode switching
-- Event logging and retrieval
-- Input validation and sanitization
-- Policy engine decision making
+- Health endpoint functionality (`/health`, `/`, `/docs`, `/redoc`)
+- Security mode switching and global mode management
+- Event logging and retrieval (`/admin/events`, `/admin/decisions`)
+- Input validation and sanitization across all security modes
+- Policy engine decision making and risk assessment
+- Chat endpoint security behavior (ALLOW/SANITIZE/BLOCK decisions)
+- RAG poisoning detection and blocking
+- Tool abuse prevention
+- Prompt injection detection with various attack patterns
+- Steganography detection
+- Admin endpoint functionality
+- Global exception handling
+- CORS middleware configuration
+
+### Test Files
+- `backend/tests/test_health.py` - Health endpoint and basic API tests
+- `backend/tests/test_chat_security.py` - Comprehensive security behavior tests
+- `backend/test_score_risk.py` - Policy engine risk scoring debug script
+
+### Running Individual Test Files
+```bash
+# Health and basic API tests
+pytest backend/tests/test_health.py -v
+
+# Security behavior tests
+pytest backend/tests/test_chat_security.py -v
+
+# Run policy engine debugging script
+python backend/test_score_risk.py
+```
 
 ## Configuration
 
@@ -232,8 +301,10 @@ Environment variables can be configured in `.env`:
 
 ```bash
 # Hugging Face Configuration
-HUGGINGFACE_API_KEY=your_hf_api_key_here
 HF_MODEL_NAME=microsoft/DialoGPT-medium
+
+# API Keys (replace with actual keys in production)
+API_KEY=your_api_key_here
 
 # Server Configuration
 HOST=0.0.0.0
@@ -247,6 +318,42 @@ LOG_LEVEL=INFO
 DEFAULT_SECURITY_MODE=Normal
 MAX_PROMPT_LENGTH=10000
 ENABLE_METRICS_LOGGING=true
+```
+
+### Request/Response Models
+
+#### ChatRequest
+```json
+{
+  "user_id": "string (required)",
+  "prompt": "string (1-10000 chars, required)",
+  "attachments": ["string"] (optional),
+  "requested_tools": ["string"] (optional)
+}
+```
+
+#### ChatResponse
+```json
+{
+  "decision": "ALLOW|SANITIZE|BLOCK",
+  "risk_level": "LOW|MEDIUM|HIGH|CRITICAL",
+  "response": "string",
+  "reason": "string",
+  "trace_id": "uuid",
+  "signals": {"signal_type": "details"},
+  "user_id": "string",
+  "security_mode": "Off|Weak|Normal|Strong",
+  "timestamp": "ISO datetime"
+}
+```
+
+#### ModeRequest/Response
+```json
+{
+  "mode": "Off|Weak|Normal|Strong",
+  "active_mode": "Off|Weak|Normal|Strong",
+  "message": "string"
+}
 ```
 
 ## Security Best Practices

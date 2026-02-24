@@ -38,48 +38,48 @@ class RAGContentValidator:
         self.compiled_inappropriate = [re.compile(pattern) for pattern in self.inappropriate_patterns]
         self.compiled_pii = [re.compile(pattern) for pattern in self.pii_patterns]
     
-    async def validate_context(self, context_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate retrieved RAG context"""
+    async def validate_context(self, context: str) -> Dict[str, Any]:
+        """Validate retrieved RAG content for safety"""
         
-        if not context_data or "contexts" not in context_data:
-            return {
-                "is_valid": False,
-                "reason": "No context data provided",
-                "risk_level": "HIGH"
-            }
-        
-        contexts = context_data.get("contexts", [])
-        validation_results = []
-        overall_risk_score = 0.0
-        
-        for ctx in contexts:
-            content = ctx.get("content", "")
-            result = await self._validate_single_context(content)
-            validation_results.append(result)
-            overall_risk_score += result["risk_score"]
-        
-        # Calculate average risk score
-        if contexts:
-            overall_risk_score /= len(contexts)
-        
-        # Make overall decision
-        is_valid = overall_risk_score < 0.7
-        risk_level = self._determine_risk_level(overall_risk_score)
-        
-        # Check for any high-risk individual contexts
-        for result in validation_results:
-            if result["risk_level"] == "HIGH":
-                is_valid = False
-                risk_level = "HIGH"
-                break
-        
-        return {
-            "is_valid": is_valid,
-            "risk_level": risk_level,
-            "overall_risk_score": overall_risk_score,
-            "validation_results": validation_results,
-            "reason": self._generate_validation_reason(is_valid, risk_level, validation_results)
+        result = {
+            "context_safe": True,
+            "context_flags": [],
+            "clean_context": context
         }
+        
+        # Check for injection markers
+        injection_patterns = [
+            "ignore previous instructions",
+            "system prompt", 
+            "you are ChatGPT",
+            "developer message",
+            "bypass security",
+            "admin access",
+            "jailbreak"
+        ]
+        
+        context_lower = context.lower()
+        for pattern in injection_patterns:
+            if pattern in context_lower:
+                result["context_safe"] = False
+                result["context_flags"].append(f"injection_marker: {pattern}")
+        
+        # If context is unsafe, clean it
+        if not result["context_safe"]:
+            # Redact dangerous lines
+            lines = context.split('\n')
+            clean_lines = []
+            for line in lines:
+                line_lower = line.lower()
+                if not any(marker in line_lower for marker in injection_patterns):
+                    clean_lines.append(line)
+                else:
+                    clean_lines.append("[REDACTED_SUSPICIOUS_CONTENT]")
+            
+            result["clean_context"] = '\n'.join(clean_lines)
+        
+        print(f"DEBUG: RAG validation - Safe: {result['context_safe']}, Flags: {result['context_flags']}")
+        return result
     
     async def _validate_single_context(self, content: str) -> Dict[str, Any]:
         """Validate a single context content"""

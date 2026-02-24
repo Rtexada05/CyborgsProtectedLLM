@@ -125,17 +125,87 @@ class InputContentChecker:
         self.compiled_injection = [re.compile(pattern) for pattern in self.injection_patterns]
         self.compiled_suspicious = [re.compile(pattern) for pattern in self.suspicious_patterns]
     
+    async def analyze(self, prompt: str) -> Dict[str, Any]:
+        """Analyze prompt and return structured signals"""
+        
+        # Debug: Log the content being checked
+        print(f"DEBUG: Analyzing content: '{prompt}'")
+        
+        signals = {
+            "prompt_injection_suspected": False,
+            "rag_injection_suspected": False,
+            "tool_abuse_suspected": False,
+            "encoding_obfuscation": False,
+            "suspicious_keywords": [],
+            "pattern_hits": []
+        }
+        
+        content_lower = prompt.lower()
+        
+        # Check for injection patterns
+        injection_matches = []
+        for i, pattern in enumerate(self.compiled_injection):
+            matches = pattern.findall(prompt)
+            if matches:
+                print(f"DEBUG: Injection pattern {i} matched: {matches}")
+                injection_matches.extend(matches)
+                signals["pattern_hits"].append(f"injection_pattern_{i}")
+                signals["prompt_injection_suspected"] = True
+        
+        # Check for suspicious patterns
+        suspicious_matches = []
+        for i, pattern in enumerate(self.compiled_suspicious):
+            matches = pattern.findall(prompt)
+            if matches:
+                print(f"DEBUG: Suspicious pattern {i} matched: {matches}")
+                suspicious_matches.extend(matches)
+                signals["pattern_hits"].append(f"suspicious_pattern_{i}")
+        
+        # Check for RAG injection triggers
+        rag_triggers = ["use context:", "from documents:", "retrieve", "based on context", "refer to"]
+        if any(trigger in content_lower for trigger in rag_triggers):
+            signals["rag_injection_suspected"] = True
+            signals["pattern_hits"].append("rag_trigger_detected")
+        
+        # Check for tool abuse triggers
+        tool_triggers = ["calculate", "open file", "read file", "browse", "execute", "shell", "run command"]
+        if any(trigger in content_lower for trigger in tool_triggers):
+            signals["tool_abuse_suspected"] = True
+            signals["pattern_hits"].append("tool_trigger_detected")
+        
+        # Check for encoding obfuscation
+        encoding_triggers = ["base64", "hex", "decode", "rot13", "atbash", "caesar"]
+        if any(trigger in content_lower for trigger in encoding_triggers):
+            signals["encoding_obfuscation"] = True
+            signals["pattern_hits"].append("encoding_detected")
+        
+        # Extract suspicious keywords
+        suspicious_keywords = [
+            "ignore", "forget", "disregard", "bypass", "override", "jailbreak",
+            "system", "admin", "root", "password", "token", "secret", "key"
+        ]
+        for keyword in suspicious_keywords:
+            if keyword in content_lower:
+                signals["suspicious_keywords"].append(keyword)
+        
+        print(f"DEBUG: Analysis result: {signals}")
+        return signals
+    
     async def check_content(self, content: str) -> List[SecuritySignal]:
         """Check content for injection attempts and return signals"""
         
         signals = []
         content_lower = content.lower()
         
+        # Debug: Log the content being checked
+        print(f"DEBUG: Checking content: '{content}'")
+        
         # Check for injection patterns
         injection_matches = []
         for i, pattern in enumerate(self.compiled_injection):
             matches = pattern.findall(content)
             if matches:
+                print(f"DEBUG: Injection pattern {i} matched: {matches}")
                 injection_matches.extend(matches)
                 signals.append(SecuritySignal(
                     signal_type="prompt_injection",
@@ -151,6 +221,7 @@ class InputContentChecker:
         for i, pattern in enumerate(self.compiled_suspicious):
             matches = pattern.findall(content)
             if matches:
+                print(f"DEBUG: Suspicious pattern {i} matched: {matches}")
                 suspicious_matches.extend(matches)
                 signals.append(SecuritySignal(
                     signal_type="suspicious_content",

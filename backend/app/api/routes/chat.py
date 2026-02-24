@@ -7,6 +7,7 @@ from typing import Dict, Any
 
 from ...models.schemas import ChatRequest, ChatResponse
 from ...controller.defense_controller import DefenseController
+from ...services.mode_manager import shared_mode_manager
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -18,12 +19,16 @@ defense_controller = DefenseController()
 async def chat(request: ChatRequest):
     """Process chat request with protection mechanisms"""
     try:
+        # Always use the global security mode (ignore request mode)
+        current_mode = shared_mode_manager.get_mode().value
+        
         # Process the request through defense controller
         response = await defense_controller.handle_request(
             user_id=request.user_id,
             prompt=request.prompt,
-            mode=request.mode,
-            attachments=request.attachments
+            mode=current_mode,
+            attachments=request.attachments,
+            requested_tools=request.requested_tools
         )
         
         return response
@@ -31,5 +36,5 @@ async def chat(request: ChatRequest):
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error processing chat request: {str(e)}"
+            detail=f"Processing error: {str(e)}"
         )

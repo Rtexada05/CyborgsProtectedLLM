@@ -203,3 +203,104 @@ class ToolGatekeeper:
             "risks": ["Unknown risks"],
             "mitigations": ["Manual review required"]
         })
+
+    async def detect_requested_tools(self, prompt: str, requested_tools: Optional[List[str]]) -> List[str]:
+        """Detect requested tools from prompt or explicit list"""
+        
+        if requested_tools:
+            return requested_tools
+        
+        # Detect from prompt
+        prompt_lower = prompt.lower()
+        detected_tools = []
+        
+        # Calculator patterns
+        calculator_patterns = [
+            r"(?i)(calculate|compute|solve|math).*(\d+|formula|equation)",
+            r"(?i)\d+\s*[\+\-\*\/]\s*\d+",
+            r"(?i)(sqrt|power|log|sin|cos|tan)"
+        ]
+        
+        for pattern in calculator_patterns:
+            if re.search(pattern, prompt):
+                detected_tools.append("calculator")
+                break
+        
+        # File reader patterns
+        file_patterns = [
+            r"(?i)(read|open|load|access).*(file|document|data)",
+            r"(?i)(cat|type|view).*(file|content)",
+            r"(?i)\.(txt|csv|json|xml|log).*(file|content)"
+        ]
+        
+        for pattern in file_patterns:
+            if re.search(pattern, prompt):
+                detected_tools.append("file_reader")
+                break
+        
+        # Web patterns
+        web_patterns = [
+            r"(?i)(browse|search|surf).*(web|internet)",
+            r"(?i)(look up|find).*(online|website)"
+        ]
+        
+        for pattern in web_patterns:
+            if re.search(pattern, prompt):
+                detected_tools.append("web")
+                break
+        
+        return list(set(detected_tools))  # Remove duplicates
+    
+    async def authorize_tools(self, tools: List[str], mode: str, risk_level: str) -> Dict[str, Any]:
+        """Authorize tools based on mode and risk level"""
+        
+        result = {
+            "tools_allowed": True,
+            "allowed_tools": tools.copy(),
+            "tool_reason": "Tools allowed"
+        }
+        
+        # Mode-specific rules
+        if mode == "Off":
+            # Allow all tools
+            return result
+        
+        elif mode == "Weak":
+            # Allow calculator, deny web/file_reader unless LOW
+            if risk_level != "LOW":
+                restricted_tools = ["web", "file_reader"]
+                result["allowed_tools"] = [t for t in tools if t not in restricted_tools]
+                if len(result["allowed_tools"]) < len(tools):
+                    result["tools_allowed"] = False
+                    result["tool_reason"] = "Web/file access not allowed in Weak mode for Medium/High risk"
+        
+        elif mode == "Normal":
+            # Allow calculator if <=MEDIUM, deny web/file_reader unless LOW and no injection
+            if risk_level not in ["LOW", "MEDIUM"]:
+                restricted_tools = ["web", "file_reader"]
+                result["allowed_tools"] = [t for t in tools if t not in restricted_tools]
+                if len(result["allowed_tools"]) < len(tools):
+                    result["tools_allowed"] = False
+                    result["tool_reason"] = "Web/file access not allowed in Normal mode for High risk"
+            elif risk_level == "HIGH":
+                restricted_tools = ["web", "file_reader"]
+                result["allowed_tools"] = [t for t in tools if t not in restricted_tools]
+                if len(result["allowed_tools"]) < len(tools):
+                    result["tools_allowed"] = False
+                    result["tool_reason"] = "Web/file access not allowed in Normal mode for High risk"
+        
+        elif mode == "Strong":
+            # Default deny all tools unless LOW and explicit allow list includes calculator only
+            if risk_level != "LOW":
+                result["tools_allowed"] = False
+                result["allowed_tools"] = []
+                result["tool_reason"] = "All tools blocked in Strong mode for Medium/High risk"
+            else:
+                # Only allow calculator in Strong mode even for LOW risk
+                result["allowed_tools"] = [t for t in tools if t == "calculator"]
+                if len(result["allowed_tools"]) < len(tools):
+                    result["tools_allowed"] = False
+                    result["tool_reason"] = "Only calculator allowed in Strong mode"
+        
+        print(f"DEBUG: Tool authorization - Mode: {mode}, Risk: {risk_level}, Tools: {tools}, Allowed: {result['allowed_tools']}")
+        return result

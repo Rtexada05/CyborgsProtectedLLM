@@ -221,6 +221,38 @@ class TextSanitizer:
         
         return text
     
+    def sanitize_text(self, prompt: str) -> str:
+        """Sanitize text by removing dangerous patterns"""
+        
+        sanitized = prompt
+        
+        # Remove common injection strings
+        injection_strings = [
+            "ignore previous instructions",
+            "reveal system prompt", 
+            "developer message",
+            "you are now",
+            "act as system",
+            "bypass security",
+            "jailbreak"
+        ]
+        
+        for injection in injection_strings:
+            sanitized = sanitized.replace(injection, "[REDACTED_INJECTION]")
+        
+        # Strip code fences
+        sanitized = re.sub(r'```[\s\S]*?```', '[CODE_BLOCK_REMOVED]', sanitized)
+        
+        # Strip HTML tags (minimal)
+        sanitized = re.sub(r'<[^>]+>', '', sanitized)
+        
+        # Truncate if too long
+        if len(sanitized) > 2000:
+            sanitized = sanitized[:2000] + "...[TRUNCATED]"
+        
+        print(f"DEBUG: Text sanitization - Original length: {len(prompt)}, Sanitized length: {len(sanitized)}")
+        return sanitized
+
     def extract_safe_content(self, text: str, max_length: int = 1000) -> str:
         """Extract safe content within length limits"""
         
