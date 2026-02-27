@@ -120,6 +120,7 @@ def test_tool_request_strong_blocks():
 def test_admin_events_endpoint():
     """Test that admin events endpoint works"""
     client = TestClient(app)
+    _set_security_mode(client, "Normal")
     
     # First make a chat request to generate events
     client.post("/chat/", json={
@@ -142,6 +143,7 @@ def test_admin_events_endpoint():
 def test_admin_decisions_endpoint():
     """Test that admin decisions endpoint works"""
     client = TestClient(app)
+    _set_security_mode(client, "Strong")
     
     # First make a chat request to generate decisions
     client.post("/chat/", json={
