@@ -10,9 +10,9 @@ import sys
 import os
 
 # Add the app directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'app'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from main import app
+from app.main import app
 
 
 client = TestClient(app)
