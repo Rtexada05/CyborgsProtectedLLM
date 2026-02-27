@@ -197,7 +197,12 @@ class DefenseController:
                 else:
                     final_prompt = final_prompt
                 
-                response_text = await self.llm_service.generate_response(final_prompt, clean_context)
+                response_text = await self.llm_service.generate_response(
+                    prompt=final_prompt,
+                    rag_context={"clean_context": clean_context} if clean_context else None,
+                    requested_tools=detected_tools,
+                    authorized_tools=tool_result.get("allowed_tools", []),
+                )
             
             # Step 10: Log events
             await self.metrics_logger.log_event(
