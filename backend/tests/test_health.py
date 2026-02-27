@@ -9,10 +9,10 @@ from datetime import datetime
 import sys
 import os
 
-# Add the app directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+# Add repository root to path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from app.main import app
+from backend.app.main import app
 
 
 client = TestClient(app)

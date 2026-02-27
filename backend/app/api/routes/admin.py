@@ -81,3 +81,12 @@ async def get_events_old(limit: int = Query(default=50, ge=1, le=100)):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving events: {str(e)}")
+
+
+@router.get("/metrics", response_model=Dict[str, Any])
+async def get_metrics():
+    """Get aggregate admin KPIs and decision/risk distributions."""
+    try:
+        return await metrics_logger.get_admin_metrics()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving metrics: {str(e)}")
