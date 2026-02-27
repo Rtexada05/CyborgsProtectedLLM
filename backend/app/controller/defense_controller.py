@@ -126,7 +126,7 @@ class DefenseController:
                 # Do NOT call LLM service
             else:
                 # Sanitize if needed
-                final_prompt = await self.text_sanitizer.sanitize_text(prompt) if needs_sanitization else prompt
+                final_prompt = self.text_sanitizer.sanitize_text(prompt) if needs_sanitization else prompt
                 
                 # Include clean context if available
                 if clean_context:
