@@ -60,8 +60,8 @@ class DefenseController:
             clean_context = None
             if await self.rag_manager.should_retrieve(prompt):
                 raw_context = await self.rag_manager.retrieve_context(prompt)
-                context_result = await self.rag_content_validator.validate_context(raw_context)
-                clean_context = context_result.get("clean_context", "")
+                context_result = await self.rag_validator.validate_context(raw_context)
+                clean_context = self._build_clean_context(context_result)
                 
                 # Log RAG check
                 await self.metrics_logger.log_event(
@@ -199,6 +199,32 @@ class DefenseController:
                 timestamp=datetime.now()
             )
     
+    def _build_clean_context(self, context_result: Dict[str, Any]) -> str:
+        """Build context text deterministically from validated canonical context."""
+        if not context_result:
+            return ""
+
+        if not context_result.get("context_safe", True):
+            return context_result.get("clean_context", "")
+
+        normalized_context = context_result.get("normalized_context", {})
+        context_entries = normalized_context.get("contexts", []) if isinstance(normalized_context, dict) else []
+
+        clean_chunks = []
+        for entry in context_entries:
+            if not isinstance(entry, dict):
+                continue
+
+            keyword = entry.get("keyword", "")
+            content = entry.get("content", "")
+            source = entry.get("source", "")
+            if not content:
+                continue
+
+            clean_chunks.append(f"[{keyword}|{source}] {content}" if keyword or source else content)
+
+        return "\n".join(clean_chunks)
+
     async def _sanitize_prompt(self, prompt: str) -> str:
         """Basic prompt sanitization"""
         # Remove potentially dangerous patterns
