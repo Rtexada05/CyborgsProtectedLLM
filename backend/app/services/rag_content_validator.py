@@ -2,10 +2,8 @@
 RAG Content Validator - validates retrieved RAG content
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import re
-
-from ..models.schemas import SecuritySignal
 
 
 class RAGContentValidator:
@@ -38,46 +36,51 @@ class RAGContentValidator:
         self.compiled_inappropriate = [re.compile(pattern) for pattern in self.inappropriate_patterns]
         self.compiled_pii = [re.compile(pattern) for pattern in self.pii_patterns]
     
-    async def validate_context(self, context: str) -> Dict[str, Any]:
-        """Validate retrieved RAG content for safety"""
-        
+    async def validate_context(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate retrieved RAG content for safety."""
+
+        normalized_context = context if isinstance(context, dict) else {"contexts": [{"content": str(context)}], "metadata": {}}
+        context_entries = normalized_context.get("contexts", [])
+        context_text_parts = [entry.get("content", "") for entry in context_entries if isinstance(entry, dict)]
+        raw_context_text = "\n".join(part for part in context_text_parts if part)
+
         result = {
             "context_safe": True,
             "context_flags": [],
-            "clean_context": context
+            "clean_context": raw_context_text,
+            "normalized_context": normalized_context,
         }
-        
+
         # Check for injection markers
         injection_patterns = [
             "ignore previous instructions",
-            "system prompt", 
-            "you are ChatGPT",
+            "system prompt",
+            "you are chatgpt",
             "developer message",
             "bypass security",
             "admin access",
             "jailbreak"
         ]
-        
-        context_lower = context.lower()
+
+        context_lower = raw_context_text.lower()
         for pattern in injection_patterns:
             if pattern in context_lower:
                 result["context_safe"] = False
                 result["context_flags"].append(f"injection_marker: {pattern}")
-        
-        # If context is unsafe, clean it
+
+        # If context is unsafe, clean it deterministically line-by-line
         if not result["context_safe"]:
-            # Redact dangerous lines
-            lines = context.split('\n')
+            lines = raw_context_text.split("\n")
             clean_lines = []
             for line in lines:
                 line_lower = line.lower()
-                if not any(marker in line_lower for marker in injection_patterns):
-                    clean_lines.append(line)
-                else:
+                if any(marker in line_lower for marker in injection_patterns):
                     clean_lines.append("[REDACTED_SUSPICIOUS_CONTENT]")
-            
-            result["clean_context"] = '\n'.join(clean_lines)
-        
+                else:
+                    clean_lines.append(line)
+
+            result["clean_context"] = "\n".join(clean_lines)
+
         print(f"DEBUG: RAG validation - Safe: {result['context_safe']}, Flags: {result['context_flags']}")
         return result
     
