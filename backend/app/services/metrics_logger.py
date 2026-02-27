@@ -2,12 +2,10 @@
 Metrics Logger - logs events and metrics for monitoring
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from datetime import datetime, timedelta
 import asyncio
 from collections import deque
-
-from ..core.config import settings
 
 
 class MetricsLogger:
@@ -16,17 +14,54 @@ class MetricsLogger:
     def __init__(self):
         # In-memory storage for events (in production, use proper logging/database)
         self.events = deque(maxlen=1000)  # Keep last 1000 events
-        self.metrics = {
-            "total_requests": 0,
-            "blocked_requests": 0,
-            "sanitized_requests": 0,
-            "allowed_requests": 0,
-            "high_risk_requests": 0,
-            "medium_risk_requests": 0,
-            "low_risk_requests": 0,
-        }
+        self.decisions = deque(maxlen=1000)
+        self.trace_ids_seen = set()
         self.start_time = datetime.now()
         self._lock = asyncio.Lock()
+
+    def _parse_timestamp(self, timestamp: Any) -> datetime:
+        """Normalize timestamp values to datetime for internal comparisons."""
+        if isinstance(timestamp, datetime):
+            return timestamp
+        if isinstance(timestamp, str):
+            try:
+                return datetime.fromisoformat(timestamp)
+            except ValueError:
+                return datetime.now()
+        return datetime.now()
+
+    def _serialize_timestamp(self, timestamp: Any) -> str:
+        """Serialize timestamp values as ISO-8601 strings for API responses."""
+        return self._parse_timestamp(timestamp).isoformat()
+
+    def _compute_decision_metrics(self) -> Dict[str, Any]:
+        """Compute request-level metrics from decision records."""
+        decision_distribution = {"BLOCK": 0, "SANITIZE": 0, "ALLOW": 0}
+        risk_distribution = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+
+        for record in self.decisions:
+            decision = record.get("decision", "ALLOW")
+            if decision in decision_distribution:
+                decision_distribution[decision] += 1
+
+            risk_level = record.get("risk_level", "LOW")
+            if risk_level not in risk_distribution:
+                risk_distribution[risk_level] = 0
+            risk_distribution[risk_level] += 1
+
+        total_requests = len(self.trace_ids_seen)
+
+        return {
+            "total_requests": total_requests,
+            "blocked_requests": decision_distribution["BLOCK"],
+            "sanitized_requests": decision_distribution["SANITIZE"],
+            "allowed_requests": decision_distribution["ALLOW"],
+            "high_risk_requests": risk_distribution.get("HIGH", 0),
+            "medium_risk_requests": risk_distribution.get("MEDIUM", 0),
+            "low_risk_requests": risk_distribution.get("LOW", 0),
+            "decision_distribution": decision_distribution,
+            "risk_distribution": risk_distribution,
+        }
 
     async def log_event(self, event_type: str, trace_id: str, user_id: str, details: Dict[str, Any]):
         """Log an event with trace tracking"""
@@ -34,33 +69,13 @@ class MetricsLogger:
         async with self._lock:
             event = {
                 "trace_id": trace_id,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(),
                 "user_id": user_id,
                 "event_type": event_type,
                 "details": details
             }
             
             self.events.append(event)
-            
-            # Update metrics
-            self.metrics["total_requests"] += 1
-            
-            if event_type == "risk_scored":
-                if details.get("risk_level") == "HIGH":
-                    self.metrics["high_risk_requests"] += 1
-                elif details.get("risk_level") == "MEDIUM":
-                    self.metrics["medium_risk_requests"] += 1
-                else:
-                    self.metrics["low_risk_requests"] += 1
-            
-            elif event_type == "decision_made":
-                decision = details.get("decision", "ALLOW")
-                if decision == "BLOCK":
-                    self.metrics["blocked_requests"] += 1
-                elif decision == "SANITIZE":
-                    self.metrics["sanitized_requests"] += 1
-                else:
-                    self.metrics["allowed_requests"] += 1
     
     async def log_decision(self, trace_id: str, user_id: str, mode: str, risk_score: int, risk_level: str, decision: str, reason: str):
         """Log a decision with full details"""
@@ -68,7 +83,7 @@ class MetricsLogger:
         async with self._lock:
             decision_record = {
                 "trace_id": trace_id,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(),
                 "user_id": user_id,
                 "mode": mode,
                 "risk_score": risk_score,
@@ -76,12 +91,9 @@ class MetricsLogger:
                 "decision": decision,
                 "reason": reason
             }
-            
-            # Store in decisions list (separate from events)
-            if not hasattr(self, 'decisions'):
-                self.decisions = []
-            
+
             self.decisions.append(decision_record)
+            self.trace_ids_seen.add(trace_id)
     
     async def get_events(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Get recent events"""
@@ -94,7 +106,7 @@ class MetricsLogger:
             return [
                 {
                     "trace_id": event["trace_id"],
-                    "timestamp": event["timestamp"],
+                    "timestamp": self._serialize_timestamp(event["timestamp"]),
                     "user_id": event["user_id"],
                     "event_type": event["event_type"],
                     "details": event["details"]
@@ -106,13 +118,16 @@ class MetricsLogger:
         """Get recent decisions"""
         
         async with self._lock:
-            if not hasattr(self, 'decisions'):
-                self.decisions = []
-            
             # Get most recent decisions
             recent_decisions = list(self.decisions)[-limit:]
-            
-            return recent_decisions
+
+            return [
+                {
+                    **decision,
+                    "timestamp": self._serialize_timestamp(decision.get("timestamp"))
+                }
+                for decision in recent_decisions
+            ]
     
     async def get_recent_events(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Get recent events"""
@@ -123,8 +138,7 @@ class MetricsLogger:
             
             # Convert datetime objects to strings for JSON serialization
             for event in recent_events:
-                if isinstance(event.get("timestamp"), datetime):
-                    event["timestamp"] = event["timestamp"].isoformat()
+                event["timestamp"] = self._serialize_timestamp(event.get("timestamp"))
             
             return recent_events
     
@@ -133,19 +147,20 @@ class MetricsLogger:
         
         async with self._lock:
             uptime = datetime.now() - self.start_time
+            metrics = self._compute_decision_metrics()
             
             # Calculate rates
-            total_requests = self.metrics["total_requests"]
+            total_requests = metrics["total_requests"]
             uptime_hours = uptime.total_seconds() / 3600
             requests_per_hour = total_requests / uptime_hours if uptime_hours > 0 else 0
             
             # Calculate percentages
-            blocked_rate = (self.metrics["blocked_requests"] / total_requests * 100) if total_requests > 0 else 0
-            sanitized_rate = (self.metrics["sanitized_requests"] / total_requests * 100) if total_requests > 0 else 0
-            allowed_rate = (self.metrics["allowed_requests"] / total_requests * 100) if total_requests > 0 else 0
+            blocked_rate = (metrics["blocked_requests"] / total_requests * 100) if total_requests > 0 else 0
+            sanitized_rate = (metrics["sanitized_requests"] / total_requests * 100) if total_requests > 0 else 0
+            allowed_rate = (metrics["allowed_requests"] / total_requests * 100) if total_requests > 0 else 0
             
             return {
-                **self.metrics,
+                **metrics,
                 "uptime_seconds": uptime.total_seconds(),
                 "uptime_formatted": str(uptime).split(".")[0],  # Remove microseconds
                 "requests_per_hour": round(requests_per_hour, 2),
@@ -153,15 +168,58 @@ class MetricsLogger:
                 "sanitized_rate_percent": round(sanitized_rate, 2),
                 "allowed_rate_percent": round(allowed_rate, 2),
                 "high_risk_rate_percent": round(
-                    (self.metrics["high_risk_requests"] / total_requests * 100) if total_requests > 0 else 0, 2
+                    (metrics["high_risk_requests"] / total_requests * 100) if total_requests > 0 else 0, 2
                 ),
                 "medium_risk_rate_percent": round(
-                    (self.metrics["medium_risk_requests"] / total_requests * 100) if total_requests > 0 else 0, 2
+                    (metrics["medium_risk_requests"] / total_requests * 100) if total_requests > 0 else 0, 2
                 ),
                 "low_risk_rate_percent": round(
-                    (self.metrics["low_risk_requests"] / total_requests * 100) if total_requests > 0 else 0, 2
+                    (metrics["low_risk_requests"] / total_requests * 100) if total_requests > 0 else 0, 2
                 ),
             }
+
+    async def get_admin_metrics(self) -> Dict[str, Any]:
+        """Aggregate KPI metrics for admin dashboards and reporting."""
+        base_metrics = await self.get_metrics()
+        total_requests = base_metrics["total_requests"]
+        total_decisions = len(self.decisions)
+
+        attack_success_rate = round(
+            (base_metrics["allowed_requests"] / total_requests * 100) if total_requests > 0 else 0,
+            2,
+        )
+        false_positive_proxy_rate = round(
+            (base_metrics["blocked_requests"] / total_requests * 100) if total_requests > 0 else 0,
+            2,
+        )
+
+        return {
+            "traffic": {
+                "total_chat_traces": total_requests,
+                "total_decision_records": total_decisions,
+                "requests_per_hour": base_metrics["requests_per_hour"],
+            },
+            "decisions": {
+                "distribution": base_metrics["decision_distribution"],
+                "blocked_rate_percent": base_metrics["blocked_rate_percent"],
+                "sanitized_rate_percent": base_metrics["sanitized_rate_percent"],
+                "allowed_rate_percent": base_metrics["allowed_rate_percent"],
+            },
+            "risk": {
+                "distribution": base_metrics["risk_distribution"],
+                "high_risk_rate_percent": base_metrics["high_risk_rate_percent"],
+                "medium_risk_rate_percent": base_metrics["medium_risk_rate_percent"],
+                "low_risk_rate_percent": base_metrics["low_risk_rate_percent"],
+            },
+            "kpis": {
+                "attack_success_rate_percent": attack_success_rate,
+                "false_positive_proxy_percent": false_positive_proxy_rate,
+                "throughput_rps_placeholder": None,
+                "latency_p50_ms_placeholder": None,
+                "latency_p95_ms_placeholder": None,
+            },
+            "generated_at": datetime.now().isoformat(),
+        }
     
     async def get_user_activity(self, user_id: str, hours: int = 24) -> Dict[str, Any]:
         """Get activity summary for a specific user"""
@@ -172,7 +230,7 @@ class MetricsLogger:
             user_events = [
                 event for event in self.events
                 if event.get("user_id") == user_id and 
-                   event.get("timestamp", datetime.now()) > cutoff_time
+                   self._parse_timestamp(event.get("timestamp")) > cutoff_time
             ]
             
             total_requests = len(user_events)
@@ -191,7 +249,7 @@ class MetricsLogger:
                     (blocked_requests / total_requests * 100) if total_requests > 0 else 0, 2
                 ),
                 "last_activity": max(
-                    [e.get("timestamp") for e in user_events],
+                    [self._serialize_timestamp(e.get("timestamp")) for e in user_events],
                     default=None
                 )
             }
@@ -204,14 +262,14 @@ class MetricsLogger:
             
             recent_events = [
                 event for event in self.events
-                if event.get("timestamp", datetime.now()) > cutoff_time and
+                if self._parse_timestamp(event.get("timestamp")) > cutoff_time and
                    event.get("event_type") == "chat_request"
             ]
             
             # Group by hour
             hourly_data = {}
             for event in recent_events:
-                hour_key = event.get("timestamp").strftime("%Y-%m-%d %H:00")
+                hour_key = self._parse_timestamp(event.get("timestamp")).strftime("%Y-%m-%d %H:00")
                 if hour_key not in hourly_data:
                     hourly_data[hour_key] = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
                 
@@ -234,7 +292,7 @@ class MetricsLogger:
             # Filter out old events
             self.events = deque(
                 [event for event in self.events 
-                 if event.get("timestamp", datetime.now()) > cutoff_time],
+                 if self._parse_timestamp(event.get("timestamp")) > cutoff_time],
                 maxlen=1000
             )
             

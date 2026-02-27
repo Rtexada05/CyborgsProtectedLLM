@@ -3,14 +3,10 @@ Test chat security behavior
 """
 
 import pytest
+import asyncio
 from fastapi.testclient import TestClient
-import sys
-import os
-
-# Add app directory to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'app'))
-
-from main import app
+from backend.app.main import app
+from backend.app.services.metrics_logger import MetricsLogger
 
 
 def test_chat_allow_normal():
@@ -155,3 +151,62 @@ def test_admin_decisions_endpoint():
     assert data["total_decisions"] <= 5
     assert len(data["decisions"]) <= 5
     print(f"✅ test_admin_decisions_endpoint: Retrieved {len(data['decisions'])} decisions")
+
+
+def test_admin_metrics_endpoint():
+    """Test that admin metrics endpoint returns aggregate KPI sections"""
+    client = TestClient(app)
+
+    client.post("/chat/", json={
+        "user_id": "metrics_user",
+        "prompt": "hello world",
+        "mode": "Normal"
+    })
+
+    response = client.get("/admin/metrics")
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert "traffic" in data
+    assert "decisions" in data
+    assert "risk" in data
+    assert "kpis" in data
+    assert "total_chat_traces" in data["traffic"]
+    assert "distribution" in data["decisions"]
+    assert "distribution" in data["risk"]
+    print("✅ test_admin_metrics_endpoint: Metrics payload returned")
+
+
+def test_metrics_trace_counted_once_per_trace():
+    """Test that total requests count unique trace IDs once."""
+    logger = MetricsLogger()
+
+    async def run_case():
+        await logger.log_decision(
+            trace_id="trace-1",
+            user_id="user-a",
+            mode="Normal",
+            risk_score=10,
+            risk_level="LOW",
+            decision="ALLOW",
+            reason="safe"
+        )
+        await logger.log_decision(
+            trace_id="trace-1",
+            user_id="user-a",
+            mode="Normal",
+            risk_score=20,
+            risk_level="MEDIUM",
+            decision="SANITIZE",
+            reason="updated"
+        )
+        metrics = await logger.get_metrics()
+        return metrics
+
+    metrics = asyncio.run(run_case())
+
+    assert metrics["total_requests"] == 1
+    assert metrics["sanitized_requests"] == 1
+    assert metrics["allowed_requests"] == 1
+    print("✅ test_metrics_trace_counted_once_per_trace: unique trace counting works")
