@@ -57,6 +57,21 @@ Open your browser and navigate to `http://localhost:8000`
 - `GET /admin/events` - View recent security events (configurable limit)
 - `GET /admin/decisions` - View recent security decisions (configurable limit)
 - `GET /admin/events/old` - Legacy events endpoint
+- `GET /admin/metrics` - Aggregate KPI metrics (attack success proxy, false-positive proxy, distribution summaries)
+
+
+## Metrics Semantics
+
+The admin metrics endpoint (`GET /admin/metrics`) exposes **trace-level** aggregates derived from decision records:
+
+- **Request counting**: `total_chat_traces` counts unique `trace_id` values with a recorded decision (counted once per chat trace).
+- **Decision distribution**: `BLOCK`, `SANITIZE`, and `ALLOW` totals are computed from decision records.
+- **Risk distribution**: risk totals are computed from each decision record's `risk_level` (`HIGH`, `MEDIUM`, `LOW`, plus any additional levels observed at runtime).
+- **Attack success rate (proxy)**: percentage of traces with `ALLOW` decisions.
+- **False-positive proxy**: percentage of traces with `BLOCK` decisions (a conservative proxy, not a labeled false-positive metric).
+- **Throughput/latency placeholders**: `throughput_rps_placeholder`, `latency_p50_ms_placeholder`, and `latency_p95_ms_placeholder` are present for downstream instrumentation and currently return `null`.
+
+Timestamps are normalized internally as `datetime` objects and serialized to ISO-8601 strings in API responses for consistency.
 
 ## Security Modes
 
