@@ -16,6 +16,7 @@ class Settings:
     # Hugging Face Configuration
     HF_MODEL_NAME: str = os.getenv("HF_MODEL_NAME", "microsoft/DialoGPT-medium")
     API_KEY: Optional[str] = os.getenv("API_KEY")
+    CLIENT_API_KEY: Optional[str] = os.getenv("CLIENT_API_KEY")
     
     # Server Configuration
     HOST: str = os.getenv("HOST", "0.0.0.0")

@@ -15,8 +15,15 @@ from backend.tests.attacks.bulk_runner import run_attack_matrix
 if __name__ == "__main__":
     client = TestClient(app)
     modes = ["Off", "Weak", "Normal", "Strong"]
+    client_api_key = os.getenv("CLIENT_API_KEY")
+    chat_headers = {"X-API-Key": client_api_key} if client_api_key else None
 
-    outcomes, summary = run_attack_matrix(client=client, modes=modes, user_prefix="attack_script")
+    outcomes, summary = run_attack_matrix(
+        client=client,
+        modes=modes,
+        user_prefix="attack_script",
+        chat_headers=chat_headers,
+    )
 
     print("Per-case outcomes:")
     for outcome in outcomes:

@@ -13,13 +13,13 @@ from backend.tests.attacks.bulk_runner import run_attack_matrix
 from backend.tests.attacks.corpus import iter_attack_cases
 
 
-def test_attack_corpus_bulk_runner():
+def test_attack_corpus_bulk_runner(chat_headers):
     """Run attack corpus in every mode and emit per-case + summary outcomes."""
 
     client = TestClient(app)
     modes = ["Off", "Weak", "Normal", "Strong"]
 
-    outcomes, summary = run_attack_matrix(client=client, modes=modes)
+    outcomes, summary = run_attack_matrix(client=client, modes=modes, chat_headers=chat_headers)
 
     expected_count = len(modes) * len(iter_attack_cases())
     assert len(outcomes) == expected_count

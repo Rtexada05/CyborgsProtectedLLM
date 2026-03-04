@@ -2,10 +2,10 @@
 Chat endpoint with protection mechanisms
 """
 
-from fastapi import APIRouter, HTTPException
-from typing import Dict, Any
+from fastapi import APIRouter, Depends, HTTPException
 
 from ...models.schemas import ChatRequest, ChatResponse
+from ..dependencies.auth import require_client_api_key
 from ...controller.defense_controller import DefenseController
 from ...services.mode_manager import shared_mode_manager
 
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 defense_controller = DefenseController()
 
 
-@router.post("/", response_model=ChatResponse)
+@router.post("/", response_model=ChatResponse, dependencies=[Depends(require_client_api_key)])
 async def chat(request: ChatRequest):
     """Process chat request with protection mechanisms"""
     try:

@@ -2,7 +2,7 @@
 
 from collections import Counter
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from .corpus import AttackCase, iter_attack_cases
 
@@ -22,7 +22,12 @@ class AttackOutcome:
     reason: str
 
 
-def run_attack_matrix(client, modes: Iterable[str], user_prefix: str = "attack_tester") -> Tuple[List[AttackOutcome], Dict[str, Dict[str, int]]]:
+def run_attack_matrix(
+    client,
+    modes: Iterable[str],
+    user_prefix: str = "attack_tester",
+    chat_headers: Optional[Dict[str, str]] = None,
+) -> Tuple[List[AttackOutcome], Dict[str, Dict[str, int]]]:
     """Execute all corpus cases against each security mode.
 
     Uses /admin/mode for global mode setting and /chat/ for contract-compliant requests.
@@ -36,7 +41,7 @@ def run_attack_matrix(client, modes: Iterable[str], user_prefix: str = "attack_t
 
         for case in iter_attack_cases():
             payload = case.to_chat_payload(user_id=f"{user_prefix}_{mode.lower()}")
-            response = client.post("/chat/", json=payload)
+            response = client.post("/chat/", headers=chat_headers, json=payload)
             assert response.status_code == 200, f"Case {case.case_id} failed: {response.text}"
 
             body = response.json()
