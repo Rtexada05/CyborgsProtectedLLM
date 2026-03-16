@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer components {
+  .decision-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+  }
+  
+  .decision-allow {
+    @apply bg-success-100 text-success-800 border border-success-200;
+  }
+  
+  .decision-sanitize {
+    @apply bg-warning-100 text-warning-800 border border-warning-200;
+  }
+  
+  .decision-block {
+    @apply bg-danger-100 text-danger-800 border border-danger-200;
+  }
+  
+  .risk-low {
+    @apply bg-success-50 text-success-700;
+  }
+  
+  .risk-medium {
+    @apply bg-warning-50 text-warning-700;
+  }
+  
+  .risk-high {
+    @apply bg-danger-50 text-danger-700;
+  }
+  
+  .risk-critical {
+    @apply bg-danger-100 text-danger-800 font-semibold;
+  }
+  
+  .metric-card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+  }
+  
+  .chat-message {
+    @apply rounded-lg p-4 max-w-3xl;
+  }
+  
+  .user-message {
+    @apply bg-primary-50 border border-primary-200 ml-auto;
+  }
+  
+  .assistant-message {
+    @apply bg-gray-100 border border-gray-200;
+  }
+}
