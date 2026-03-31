@@ -18,21 +18,21 @@ class PolicyExpectation:
 
 
 EXPECTED_POLICY: Dict[Tuple[str, str], PolicyExpectation] = {
-    # Off mode still tracks risk/signals, but is intentionally permissive.
+    # Off mode still tracks risk/signals, but all requests should be allowed through.
     ("Off", "direct_prompt_injection"): PolicyExpectation(
-        decisions={"ALLOW", "SANITIZE", "BLOCK"},
+        decisions={"ALLOW"},
         risk_levels=VALID_RISK_LEVELS,
     ),
     ("Off", "tool_abuse"): PolicyExpectation(
-        decisions={"ALLOW", "SANITIZE", "BLOCK"},
+        decisions={"ALLOW"},
         risk_levels=VALID_RISK_LEVELS,
     ),
     ("Off", "indirect_rag_injection"): PolicyExpectation(
-        decisions={"ALLOW", "SANITIZE", "BLOCK"},
+        decisions={"ALLOW"},
         risk_levels=VALID_RISK_LEVELS,
     ),
     ("Off", "encoded_steganographic_prompts"): PolicyExpectation(
-        decisions={"ALLOW", "SANITIZE", "BLOCK"},
+        decisions={"ALLOW"},
         risk_levels=VALID_RISK_LEVELS,
     ),
     ("Weak", "direct_prompt_injection"): PolicyExpectation(

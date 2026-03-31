@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/common/Header';
 import { ChatWindow } from './components/chat/ChatWindow';
 import { SecurityModeSelector } from './components/admin/SecurityModeSelector';
@@ -20,12 +20,40 @@ const App: React.FC = () => {
   const [events, setEvents] = useState<any[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
 
-  // Fetch events when logs tab is selected
+  const fetchEvents = useCallback(async () => {
+    setEventsLoading(true);
+    try {
+      const decisionsResponse = await apiService.getDecisions(50);
+      setEvents(decisionsResponse.decisions);
+    } catch (error) {
+      console.error('Failed to fetch events:', error);
+    } finally {
+      setEventsLoading(false);
+    }
+  }, []);
+
+  // Fetch logs and dashboard data when their tabs are selected
   useEffect(() => {
     if (currentTab === 'logs') {
       fetchEvents();
     }
-  }, [currentTab]);
+    if (currentTab === 'dashboard') {
+      refreshMetrics();
+    }
+  }, [currentTab, fetchEvents, refreshMetrics]);
+
+  // Refresh dashboard/log data after completed chat responses.
+  useEffect(() => {
+    const latestMessage = messages[messages.length - 1];
+    if (!latestMessage || !latestMessage.trace_id) {
+      return;
+    }
+
+    refreshMetrics();
+    if (currentTab === 'logs') {
+      fetchEvents();
+    }
+  }, [messages, currentTab, fetchEvents, refreshMetrics]);
 
   // Check system health periodically
   useEffect(() => {
@@ -43,22 +71,13 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const fetchEvents = async () => {
-    setEventsLoading(true);
-    try {
-      const eventsResponse = await apiService.getEvents(20);
-      setEvents(eventsResponse.events);
-    } catch (error) {
-      console.error('Failed to fetch events:', error);
-    } finally {
-      setEventsLoading(false);
-    }
-  };
-
   const handleModeChange = async (newMode: SecurityMode) => {
     try {
       await updateSecurityMode(newMode);
       refreshMetrics(); // Refresh metrics after mode change
+      if (currentTab === 'logs') {
+        fetchEvents();
+      }
     } catch (error) {
       console.error('Failed to update security mode:', error);
     }

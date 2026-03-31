@@ -4,6 +4,8 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
 
+from backend.app.core.config import settings
+
 from .corpus import AttackCase, iter_attack_cases
 
 
@@ -34,30 +36,46 @@ def run_attack_matrix(
     """
 
     outcomes: List[AttackOutcome] = []
+    attack_cases = list(iter_attack_cases())
+    modes = list(modes)
+    required_budget = max(len(attack_cases) * len(modes), 1) + 5
 
-    for mode in modes:
-        mode_resp = client.post("/admin/mode", json={"mode": mode})
-        assert mode_resp.status_code == 200, f"Failed to set mode={mode}: {mode_resp.text}"
+    original_ip_limit = settings.RATE_LIMIT_IP_PER_MINUTE
+    original_api_key_limit = settings.RATE_LIMIT_API_KEY_PER_MINUTE
+    original_user_quotas = settings.ENABLE_USER_QUOTAS
 
-        for case in iter_attack_cases():
-            payload = case.to_chat_payload(user_id=f"{user_prefix}_{mode.lower()}")
-            response = client.post("/chat/", headers=chat_headers, json=payload)
-            assert response.status_code == 200, f"Case {case.case_id} failed: {response.text}"
+    settings.RATE_LIMIT_IP_PER_MINUTE = max(settings.RATE_LIMIT_IP_PER_MINUTE, required_budget)
+    settings.RATE_LIMIT_API_KEY_PER_MINUTE = max(settings.RATE_LIMIT_API_KEY_PER_MINUTE, required_budget)
+    settings.ENABLE_USER_QUOTAS = False
 
-            body = response.json()
-            decision = body["decision"]
-            assert decision in VALID_DECISIONS, f"Invalid decision for {case.case_id}: {decision}"
+    try:
+        for mode in modes:
+            mode_resp = client.post("/admin/mode", json={"mode": mode})
+            assert mode_resp.status_code == 200, f"Failed to set mode={mode}: {mode_resp.text}"
 
-            outcomes.append(
-                AttackOutcome(
-                    mode=mode,
-                    case_id=case.case_id,
-                    category=case.category,
-                    decision=decision,
-                    risk_level=body["risk_level"],
-                    reason=body["reason"],
+            for case in attack_cases:
+                payload = case.to_chat_payload(user_id=f"{user_prefix}_{mode.lower()}")
+                response = client.post("/chat/", headers=chat_headers, json=payload)
+                assert response.status_code == 200, f"Case {case.case_id} failed: {response.text}"
+
+                body = response.json()
+                decision = body["decision"]
+                assert decision in VALID_DECISIONS, f"Invalid decision for {case.case_id}: {decision}"
+
+                outcomes.append(
+                    AttackOutcome(
+                        mode=mode,
+                        case_id=case.case_id,
+                        category=case.category,
+                        decision=decision,
+                        risk_level=body["risk_level"],
+                        reason=body["reason"],
+                    )
                 )
-            )
+    finally:
+        settings.RATE_LIMIT_IP_PER_MINUTE = original_ip_limit
+        settings.RATE_LIMIT_API_KEY_PER_MINUTE = original_api_key_limit
+        settings.ENABLE_USER_QUOTAS = original_user_quotas
 
     summary = summarize_outcomes(outcomes)
     return outcomes, summary

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Check, X, AlertTriangle } from 'lucide-react';
+import { Database, Check, AlertTriangle } from 'lucide-react';
 
 interface RAGStatusBadgeProps {
   used: boolean;

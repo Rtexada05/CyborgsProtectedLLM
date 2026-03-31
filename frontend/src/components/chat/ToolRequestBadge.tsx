@@ -7,6 +7,11 @@ interface ToolRequestBadgeProps {
 }
 
 export const ToolRequestBadge: React.FC<ToolRequestBadgeProps> = ({ tool, allowed }) => {
+  const formattedTool = tool
+    .split('_')
+    .map(segment => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+
   const getBadgeClass = () => {
     return allowed
       ? 'bg-success-100 text-success-800 border border-success-200'
@@ -14,17 +19,17 @@ export const ToolRequestBadge: React.FC<ToolRequestBadgeProps> = ({ tool, allowe
   };
 
   const getIcon = () => {
-    return allowed ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />;
+    return allowed ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />;
   };
 
   const getToolIcon = () => {
-    return <Wrench className="h-3 w-3" />;
+    return <Wrench className="h-4 w-4" />;
   };
 
   return (
-    <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getBadgeClass()}`}>
+    <span className={`inline-flex items-center space-x-1 rounded-full px-3 py-1.5 text-sm font-medium ${getBadgeClass()}`}>
       {getToolIcon()}
-      <span>{tool}</span>
+      <span>{formattedTool}</span>
       {getIcon()}
     </span>
   );

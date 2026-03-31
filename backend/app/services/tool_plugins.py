@@ -6,6 +6,7 @@ import ast
 import asyncio
 import os
 import re
+import sqlite3
 import time
 import urllib.error
 import urllib.parse
@@ -90,12 +91,65 @@ class FileReaderPlugin(ToolPlugin):
         self.allowed_root = allowed_root.resolve()
 
     def _extract_path(self, prompt: str) -> Optional[Path]:
+        quoted = re.search(r'["\']([^"\']+\.[\w]+)["\']', prompt)
+        if quoted:
+            return Path(quoted.group(1))
+
         match = re.search(r"(?:file|open|read)\s+([\w\-./]+)", prompt, flags=re.IGNORECASE)
         if not match:
             return None
         return Path(match.group(1))
 
+    def _select_uploaded_attachment(self, prompt: str, context: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not context:
+            return None
+
+        attachments = context.get("attachments", [])
+        if not isinstance(attachments, list) or not attachments:
+            return None
+
+        prompt_lower = prompt.lower()
+        for attachment in attachments:
+            name = str(attachment.get("name", ""))
+            if name and name.lower() in prompt_lower:
+                return attachment
+
+        # If the prompt is generic and a single safe attachment was uploaded, prefer it.
+        if len(attachments) == 1:
+            return attachments[0]
+
+        return None
+
     async def execute(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        uploaded_attachment = self._select_uploaded_attachment(prompt, context)
+        if uploaded_attachment is not None:
+            text_preview = str(uploaded_attachment.get("text_preview", "")).strip()
+            if text_preview:
+                return {
+                    "ok": True,
+                    "source": "uploaded_attachment",
+                    "name": uploaded_attachment.get("name", "uploaded_file"),
+                    "mime_type": uploaded_attachment.get("mime_type", "application/octet-stream"),
+                    "metadata_only": bool(uploaded_attachment.get("metadata_only", False)),
+                    "extraction_status": uploaded_attachment.get("extraction_status", "metadata_only"),
+                    "extraction_method": uploaded_attachment.get("extraction_method", "none"),
+                    "extracted_chars": int(uploaded_attachment.get("extracted_chars", 0) or 0),
+                    "truncated": bool(uploaded_attachment.get("truncated", False)),
+                    "ocr_used": bool(uploaded_attachment.get("ocr_used", False)),
+                    "page_count": uploaded_attachment.get("page_count"),
+                    "extraction_reason": uploaded_attachment.get("extraction_reason", ""),
+                    "content_preview": text_preview[:300],
+                }
+            return {
+                "ok": False,
+                "source": "uploaded_attachment",
+                "name": uploaded_attachment.get("name", "uploaded_file"),
+                "extraction_status": uploaded_attachment.get("extraction_status", "metadata_only"),
+                "extraction_method": uploaded_attachment.get("extraction_method", "none"),
+                "ocr_used": bool(uploaded_attachment.get("ocr_used", False)),
+                "error": "Uploaded attachment could not be converted into readable text",
+            }
+
         candidate = self._extract_path(prompt)
         if candidate is None:
             return {"ok": False, "error": "No file path found"}
@@ -111,6 +165,18 @@ class FileReaderPlugin(ToolPlugin):
             "ok": True,
             "path": str(resolved.relative_to(self.allowed_root)),
             "content_preview": content[:300],
+        }
+
+
+class WriteFilePlugin(ToolPlugin):
+    """Safe-deny plugin for file write attempts."""
+
+    name = "write_file"
+
+    async def execute(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        return {
+            "ok": False,
+            "error": "File write operations are disabled by security policy",
         }
 
 
@@ -152,6 +218,90 @@ class WebFetchPlugin(ToolPlugin):
             return {"ok": False, "url": url, "error": str(exc)}
 
 
+class ExecuteCommandPlugin(ToolPlugin):
+    """Safe-deny plugin for command execution attempts."""
+
+    name = "execute_command"
+
+    async def execute(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        return {
+            "ok": False,
+            "error": "Command execution is disabled by security policy",
+        }
+
+
+class DatabasePlugin(ToolPlugin):
+    """Read-only SQLite demo database plugin with allowlisted intents."""
+
+    name = "database"
+
+    def __init__(self):
+        self.connection = sqlite3.connect(":memory:", check_same_thread=False)
+        self.connection.row_factory = sqlite3.Row
+        self._seed()
+
+    def _seed(self) -> None:
+        cursor = self.connection.cursor()
+        cursor.executescript(
+            """
+            CREATE TABLE restaurant_popularity (
+                brand TEXT PRIMARY KEY,
+                popularity_rank INTEGER NOT NULL,
+                global_locations INTEGER NOT NULL,
+                notes TEXT NOT NULL
+            );
+            INSERT INTO restaurant_popularity (brand, popularity_rank, global_locations, notes) VALUES
+                ('McDonald''s', 1, 41000, 'Globally recognized quick service restaurant with extensive footprint.'),
+                ('Starbucks', 2, 38000, 'Large global coffee chain with strong brand recognition.'),
+                ('Subway', 3, 36000, 'Widely distributed sandwich chain.');
+            """
+        )
+        self.connection.commit()
+
+    def _extract_brand(self, prompt: str) -> Optional[str]:
+        prompt_lower = prompt.lower()
+        for brand in ("McDonald's", "Starbucks", "Subway"):
+            if brand.lower().replace("'", "") in prompt_lower.replace("'", ""):
+                return brand
+        return None
+
+    async def execute(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        prompt_lower = prompt.lower()
+        brand = self._extract_brand(prompt)
+        cursor = self.connection.cursor()
+
+        if brand and any(token in prompt_lower for token in ("how popular", "popularity", "popular", "rank")):
+            row = cursor.execute(
+                "SELECT brand, popularity_rank, global_locations, notes FROM restaurant_popularity WHERE brand = ?",
+                (brand,),
+            ).fetchone()
+            if not row:
+                return {"ok": False, "error": "Brand not found"}
+            return {
+                "ok": True,
+                "intent": "popularity_lookup",
+                "brand": row["brand"],
+                "popularity_rank": row["popularity_rank"],
+                "global_locations": row["global_locations"],
+                "notes": row["notes"],
+            }
+
+        if any(token in prompt_lower for token in ("list restaurants", "show restaurants", "available brands")):
+            rows = cursor.execute(
+                "SELECT brand, popularity_rank, global_locations FROM restaurant_popularity ORDER BY popularity_rank ASC"
+            ).fetchall()
+            return {
+                "ok": True,
+                "intent": "list_brands",
+                "rows": [dict(row) for row in rows],
+            }
+
+        return {
+            "ok": False,
+            "error": "Unsupported database request. Allowed intents are popularity lookup and listing available brands.",
+        }
+
+
 class ToolExecutor:
     """Executes tools with authorization checks and audited wrappers."""
 
@@ -164,6 +314,7 @@ class ToolExecutor:
         prompt: str,
         requested_tools: List[str],
         authorized_tools: List[str],
+        context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         results: Dict[str, Any] = {}
         audits: List[ToolAuditEntry] = []
@@ -180,7 +331,7 @@ class ToolExecutor:
 
             start = time.perf_counter()
             try:
-                payload = await asyncio.wait_for(plugin.execute(prompt), timeout=self.default_timeout_s)
+                payload = await asyncio.wait_for(plugin.execute(prompt, context), timeout=self.default_timeout_s)
                 duration_ms = int((time.perf_counter() - start) * 1000)
                 results[tool_name] = payload
                 audits.append(ToolAuditEntry(tool_name=tool_name, status="executed", reason="ok", duration_ms=duration_ms))
@@ -195,10 +346,14 @@ class ToolExecutor:
 
 
 def build_default_tool_executor() -> ToolExecutor:
-    repo_root = Path(os.getenv("TOOL_FILE_ROOT", "/workspace/CyborgsProtectedLLM")).resolve()
+    default_root = Path(__file__).resolve().parents[3]
+    repo_root = Path(os.getenv("TOOL_FILE_ROOT", str(default_root))).resolve()
     plugins: List[ToolPlugin] = [
         CalculatorPlugin(),
         FileReaderPlugin(allowed_root=repo_root),
+        WriteFilePlugin(),
         WebFetchPlugin(allowed_domains=["example.com", "www.example.com"]),
+        ExecuteCommandPlugin(),
+        DatabasePlugin(),
     ]
     return ToolExecutor(plugins)

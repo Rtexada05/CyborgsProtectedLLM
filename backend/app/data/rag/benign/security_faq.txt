@@ -1,0 +1,2 @@
+Protected LLM systems should validate user input, control tool access, inspect retrieved context, and log decisions with trace identifiers.
+Security defenses should happen before a model is called whenever possible.

@@ -121,6 +121,8 @@ celerybeat.pid
 
 # Environments
 .env
+.env.local
+.env.*.local
 .venv
 env/
 venv/
@@ -178,3 +180,5 @@ Desktop.ini
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/.env
+frontend/.env.local

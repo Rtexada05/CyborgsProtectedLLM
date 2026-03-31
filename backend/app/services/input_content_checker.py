@@ -30,6 +30,7 @@ class InputContentChecker:
             # Role manipulation
             r"(?i)(you are now|from now on|starting now).*(system|admin|assistant|ai)",
             r"(?i)(let's pretend|imagine|假设).*(you are|we are).*(system|admin)",
+            r"(?i)let'?s pretend\b",
             r"(?i)(in character|as a|playing the role of).*(system|admin|ai)",
             r"(?i)(act|behave|respond).*(as if|like).*(you are|we are).*(system|admin)",
             
@@ -135,6 +136,8 @@ class InputContentChecker:
             "prompt_injection_suspected": False,
             "rag_injection_suspected": False,
             "tool_abuse_suspected": False,
+            "destructive_tool_requested": False,
+            "command_execution_requested": False,
             "encoding_obfuscation": False,
             "suspicious_keywords": [],
             "pattern_hits": []
@@ -168,17 +171,40 @@ class InputContentChecker:
             signals["pattern_hits"].append("rag_trigger_detected")
         
         # Check for tool abuse triggers
-        tool_triggers = ["calculate", "open file", "read file", "browse", "execute", "shell", "run command"]
+        tool_triggers = [
+            "calculate",
+            "open file",
+            "read file",
+            "write file",
+            "save file",
+            "browse",
+            "execute",
+            "shell",
+            "run command",
+        ]
         if any(trigger in content_lower for trigger in tool_triggers):
             signals["tool_abuse_suspected"] = True
             signals["pattern_hits"].append("tool_trigger_detected")
+
+        if any(trigger in content_lower for trigger in ("write file", "save file", "create file", "modify file")):
+            signals["destructive_tool_requested"] = True
+            signals["pattern_hits"].append("write_tool_detected")
+
+        if any(trigger in content_lower for trigger in ("execute command", "run command", "powershell", "cmd.exe", "shell")):
+            signals["command_execution_requested"] = True
+            signals["pattern_hits"].append("command_tool_detected")
         
         # Check for encoding obfuscation
         encoding_triggers = ["base64", "hex", "decode", "rot13", "atbash", "caesar"]
         if any(trigger in content_lower for trigger in encoding_triggers):
             signals["encoding_obfuscation"] = True
             signals["pattern_hits"].append("encoding_detected")
-        
+
+        # Zero-width and unusual invisible characters should be treated as obfuscation.
+        if any(marker in prompt for marker in ("\u200b", "\u200c", "\u200d", "\ufeff")):
+            signals["encoding_obfuscation"] = True
+            signals["pattern_hits"].append("zero_width_detected")
+
         # Extract suspicious keywords
         suspicious_keywords = [
             "ignore", "forget", "disregard", "bypass", "override", "jailbreak",

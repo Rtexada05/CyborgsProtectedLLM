@@ -13,8 +13,8 @@ class MetricsLogger:
     
     def __init__(self):
         # In-memory storage for events (in production, use proper logging/database)
-        self.events = deque(maxlen=1000)  # Keep last 1000 events
-        self.decisions = deque(maxlen=1000)
+        self.events = deque(maxlen=5000)  # Keep a larger session history for red-team exercises
+        self.decisions = deque(maxlen=5000)
         self.trace_ids_seen = set()
         self.start_time = datetime.now()
         self._lock = asyncio.Lock()
@@ -63,6 +63,14 @@ class MetricsLogger:
             "risk_distribution": risk_distribution,
         }
 
+    def reset(self) -> None:
+        """Reset in-memory metrics for tests."""
+
+        self.events.clear()
+        self.decisions.clear()
+        self.trace_ids_seen.clear()
+        self.start_time = datetime.now()
+
     async def log_event(self, event_type: str, trace_id: str, user_id: str, details: Dict[str, Any]):
         """Log an event with trace tracking"""
         
@@ -77,7 +85,17 @@ class MetricsLogger:
             
             self.events.append(event)
     
-    async def log_decision(self, trace_id: str, user_id: str, mode: str, risk_score: int, risk_level: str, decision: str, reason: str):
+    async def log_decision(
+        self,
+        trace_id: str,
+        user_id: str,
+        mode: str,
+        risk_score: int,
+        risk_level: str,
+        decision: str,
+        reason: str,
+        extra: Dict[str, Any] | None = None,
+    ):
         """Log a decision with full details"""
         
         async with self._lock:
@@ -91,6 +109,8 @@ class MetricsLogger:
                 "decision": decision,
                 "reason": reason
             }
+            if extra:
+                decision_record.update(extra)
 
             self.decisions.append(decision_record)
             self.trace_ids_seen.add(trace_id)
@@ -101,6 +121,7 @@ class MetricsLogger:
         async with self._lock:
             # Get most recent events
             recent_events = list(self.events)[-limit:]
+            recent_events.reverse()
             
             # Convert to dict format
             return [
@@ -120,6 +141,7 @@ class MetricsLogger:
         async with self._lock:
             # Get most recent decisions
             recent_decisions = list(self.decisions)[-limit:]
+            recent_decisions.reverse()
 
             return [
                 {
@@ -178,7 +200,7 @@ class MetricsLogger:
                 ),
             }
 
-    async def get_admin_metrics(self) -> Dict[str, Any]:
+    async def get_admin_metrics(self, guard_snapshot: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Aggregate KPI metrics for admin dashboards and reporting."""
         base_metrics = await self.get_metrics()
         total_requests = base_metrics["total_requests"]
@@ -193,7 +215,7 @@ class MetricsLogger:
             2,
         )
 
-        return {
+        payload = {
             "traffic": {
                 "total_chat_traces": total_requests,
                 "total_decision_records": total_decisions,
@@ -220,6 +242,9 @@ class MetricsLogger:
             },
             "generated_at": datetime.now().isoformat(),
         }
+        if guard_snapshot:
+            payload.update(guard_snapshot)
+        return payload
     
     async def get_user_activity(self, user_id: str, hours: int = 24) -> Dict[str, Any]:
         """Get activity summary for a specific user"""

@@ -9,6 +9,7 @@ from ...models.schemas import ModeRequest, ModeResponse, EventsResponse, Decisio
 from ...core.security_modes import SecurityMode
 from ...services.metrics_logger import shared_metrics_logger
 from ...services.mode_manager import shared_mode_manager
+from ...services.traffic_guard import shared_traffic_guard
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -87,6 +88,7 @@ async def get_events_old(limit: int = Query(default=50, ge=1, le=100)):
 async def get_metrics():
     """Get aggregate admin KPIs and decision/risk distributions."""
     try:
-        return await metrics_logger.get_admin_metrics()
+        guard_snapshot = await shared_traffic_guard.snapshot()
+        return await metrics_logger.get_admin_metrics(guard_snapshot=guard_snapshot)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving metrics: {str(e)}")

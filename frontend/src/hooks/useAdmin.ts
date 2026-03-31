@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { apiService } from '../services/api';
-import { SecurityMode, ModeResponse, Metrics } from '../services/types';
+import { SecurityMode, ModeResponse, AdminMetricsResponse } from '../services/types';
 
 export const useAdmin = () => {
   const [securityMode, setSecurityMode] = useState<SecurityMode>('Normal');
@@ -46,7 +46,7 @@ export const useAdmin = () => {
 };
 
 export const useMetrics = () => {
-  const [metrics, setMetrics] = useState<Metrics | null>(null);
+  const [metrics, setMetrics] = useState<AdminMetricsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +55,7 @@ export const useMetrics = () => {
     setError(null);
 
     try {
-      const response: Metrics = await apiService.getMetrics();
+      const response: AdminMetricsResponse = await apiService.getMetrics();
       setMetrics(response);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch metrics');

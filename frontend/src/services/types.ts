@@ -2,11 +2,46 @@
 export type SecurityMode = 'Off' | 'Weak' | 'Normal' | 'Strong';
 export type Decision = 'ALLOW' | 'SANITIZE' | 'BLOCK';
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type AttachmentKind = 'image' | 'file';
+export type ToolDecision = 'allowed' | 'denied';
+export type AttachmentDisposition = 'allow' | 'flag' | 'block';
+export type AttachmentExtractionStatus = 'success' | 'partial' | 'failed' | 'metadata_only';
+export type AttachmentExtractionMethod = 'plain_text' | 'json_text' | 'pdf_text' | 'pdf_ocr' | 'image_ocr' | 'none';
+
+export interface AttachmentRef {
+  id: string;
+  name: string;
+  mime_type: string;
+  kind: AttachmentKind;
+  content_b64?: string;
+}
+
+export interface AttachmentResult {
+  id: string;
+  name: string;
+  mime_type: string;
+  kind: AttachmentKind;
+  size_bytes: number;
+  disposition: AttachmentDisposition;
+  flags: string[];
+  text_preview: string;
+  metadata_only: boolean;
+  extraction_status: AttachmentExtractionStatus;
+  extraction_method: AttachmentExtractionMethod;
+  extracted_chars: number;
+  truncated: boolean;
+  ocr_used: boolean;
+  page_count?: number | null;
+  extraction_reason: string;
+  signals: Record<string, any>;
+}
+
+export type ToolDecisionMap = Record<string, ToolDecision>;
 
 export interface ChatRequest {
   user_id: string;
   prompt: string;
-  attachments?: string[];
+  attachments?: AttachmentRef[];
   requested_tools?: string[];
 }
 
@@ -19,6 +54,15 @@ export interface ChatResponse {
   signals?: Record<string, any>;
   user_id: string;
   security_mode: SecurityMode;
+  tools_requested: string[];
+  tools_allowed: string[];
+  tool_decisions: ToolDecisionMap;
+  rag_context_used: boolean;
+  rag_context_validated: boolean;
+  attachments_received: string[];
+  attachments_flagged: string[];
+  attachment_results: AttachmentResult[];
+  model_called: boolean;
   timestamp: string;
 }
 
@@ -59,24 +103,43 @@ export interface EventsResponse {
   timestamp: string;
 }
 
+export interface AdminDecisionRecord extends ChatResponse {
+  prompt_preview?: string;
+}
+
 export interface DecisionsResponse {
-  decisions: ChatResponse[];
+  decisions: AdminDecisionRecord[];
   total_decisions: number;
   limit: number;
   timestamp: string;
 }
 
-export interface Metrics {
-  total_chat_traces: number;
-  allow_count: number;
-  sanitize_count: number;
-  block_count: number;
-  attack_success_rate: number;
-  false_positive_rate: number;
-  risk_distribution: Record<RiskLevel, number>;
-  throughput_rps_placeholder: number | null;
-  latency_p50_ms_placeholder: number | null;
-  latency_p95_ms_placeholder: number | null;
+export interface AdminMetricsResponse {
+  traffic: {
+    total_chat_traces: number;
+    total_decision_records: number;
+    requests_per_hour: number;
+  };
+  decisions: {
+    distribution: Record<Decision, number>;
+    blocked_rate_percent: number;
+    sanitized_rate_percent: number;
+    allowed_rate_percent: number;
+  };
+  risk: {
+    distribution: Record<string, number>;
+    high_risk_rate_percent: number;
+    medium_risk_rate_percent: number;
+    low_risk_rate_percent: number;
+  };
+  kpis: {
+    attack_success_rate_percent: number;
+    false_positive_proxy_percent: number;
+    throughput_rps_placeholder: number | null;
+    latency_p50_ms_placeholder: number | null;
+    latency_p95_ms_placeholder: number | null;
+  };
+  generated_at: string;
 }
 
 export interface ChatMessage {
@@ -84,12 +147,19 @@ export interface ChatMessage {
   type: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: string;
+  trace_id?: string;
   decision?: Decision;
   risk_level?: RiskLevel;
   reason?: string;
   signals?: Record<string, any>;
+  attachments?: AttachmentRef[];
+  attachment_names?: string[];
+  attachments_flagged?: string[];
+  attachment_results?: AttachmentResult[];
   tools_requested?: string[];
   tools_allowed?: string[];
+  tool_decisions?: ToolDecisionMap;
   rag_context_used?: boolean;
   rag_context_validated?: boolean;
+  model_called?: boolean;
 }

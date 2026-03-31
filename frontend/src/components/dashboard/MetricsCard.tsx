@@ -70,12 +70,16 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
 
 interface MetricsOverviewProps {
   metrics: {
-    total_chat_traces: number;
-    allow_count: number;
-    sanitize_count: number;
-    block_count: number;
-    attack_success_rate: number;
-    false_positive_rate: number;
+    traffic: {
+      total_chat_traces: number;
+    };
+    decisions: {
+      distribution: Record<string, number>;
+    };
+    kpis: {
+      attack_success_rate_percent: number;
+      false_positive_proxy_percent: number;
+    };
   } | null;
   isLoading: boolean;
 }
@@ -106,47 +110,47 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({ metrics, isLoa
   const metricCards = [
     {
       title: 'Total Requests',
-      value: metrics.total_chat_traces.toLocaleString(),
+      value: metrics.traffic.total_chat_traces.toLocaleString(),
       icon: <Users className="h-5 w-5" />,
       color: 'primary' as const,
       subtitle: 'All chat interactions'
     },
     {
       title: 'Allowed Requests',
-      value: metrics.allow_count.toLocaleString(),
-      change: (metrics.allow_count / metrics.total_chat_traces) * 100,
+      value: (metrics.decisions.distribution.ALLOW || 0).toLocaleString(),
+      change: ((metrics.decisions.distribution.ALLOW || 0) / Math.max(metrics.traffic.total_chat_traces, 1)) * 100,
       icon: <Shield className="h-5 w-5" />,
       color: 'success' as const,
       subtitle: 'Passed security checks'
     },
     {
       title: 'Sanitized Requests',
-      value: metrics.sanitize_count.toLocaleString(),
-      change: (metrics.sanitize_count / metrics.total_chat_traces) * 100,
+      value: (metrics.decisions.distribution.SANITIZE || 0).toLocaleString(),
+      change: ((metrics.decisions.distribution.SANITIZE || 0) / Math.max(metrics.traffic.total_chat_traces, 1)) * 100,
       icon: <AlertTriangle className="h-5 w-5" />,
       color: 'warning' as const,
       subtitle: 'Cleaned before processing'
     },
     {
       title: 'Blocked Requests',
-      value: metrics.block_count.toLocaleString(),
-      change: (metrics.block_count / metrics.total_chat_traces) * 100,
+      value: (metrics.decisions.distribution.BLOCK || 0).toLocaleString(),
+      change: ((metrics.decisions.distribution.BLOCK || 0) / Math.max(metrics.traffic.total_chat_traces, 1)) * 100,
       icon: <TrendingUp className="h-5 w-5" />,
       color: 'danger' as const,
       subtitle: 'Security violations'
     },
     {
       title: 'Attack Success Rate',
-      value: `${metrics.attack_success_rate.toFixed(1)}%`,
+      value: `${metrics.kpis.attack_success_rate_percent.toFixed(1)}%`,
       icon: <TrendingUp className="h-5 w-5" />,
-      color: (metrics.attack_success_rate > 50 ? 'danger' as const : metrics.attack_success_rate > 20 ? 'warning' as const : 'success' as const),
+      color: (metrics.kpis.attack_success_rate_percent > 50 ? 'danger' as const : metrics.kpis.attack_success_rate_percent > 20 ? 'warning' as const : 'success' as const),
       subtitle: 'Lower is better'
     },
     {
       title: 'False Positive Rate',
-      value: `${metrics.false_positive_rate.toFixed(1)}%`,
+      value: `${metrics.kpis.false_positive_proxy_percent.toFixed(1)}%`,
       icon: <AlertTriangle className="h-5 w-5" />,
-      color: (metrics.false_positive_rate > 15 ? 'danger' as const : metrics.false_positive_rate > 5 ? 'warning' as const : 'success' as const),
+      color: (metrics.kpis.false_positive_proxy_percent > 15 ? 'danger' as const : metrics.kpis.false_positive_proxy_percent > 5 ? 'warning' as const : 'success' as const),
       subtitle: 'Lower is better'
     }
   ];

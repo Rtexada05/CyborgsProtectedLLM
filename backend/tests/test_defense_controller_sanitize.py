@@ -44,8 +44,13 @@ def test_sanitize_decision_does_not_hit_exception_path():
         async def detect_requested_tools(_prompt, _requested_tools):
             return []
 
-        async def authorize_tools(_detected_tools, _mode, _risk_level):
-            return {"tools_allowed": True, "tool_reason": ""}
+        async def authorize_tools(_detected_tools, _mode, _risk_level, prompt="", signals=None):
+            return {
+                "tools_allowed": True,
+                "allowed_tools": [],
+                "tool_decisions": {},
+                "tool_reason": "",
+            }
 
         async def decide_action(_risk_level, _mode):
             return "SANITIZE", "Policy requires sanitization"
@@ -53,8 +58,8 @@ def test_sanitize_decision_does_not_hit_exception_path():
         async def needs_sanitization(_signals, _risk_level, _mode):
             return True
 
-        async def generate_response(final_prompt, _clean_context):
-            return final_prompt
+        async def generate_response(**kwargs):
+            return kwargs["prompt"]
 
         controller.input_checker.analyze = analyze
         controller.rag_manager.should_retrieve = should_retrieve

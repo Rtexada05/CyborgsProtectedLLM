@@ -78,9 +78,31 @@ src/
 └── styles/              # Global styles and Tailwind config
 ```
 
-## Mock Data
+## Environment Configuration
 
-The frontend includes comprehensive mock data that demonstrates:
+Create a local env file in `frontend/.env`:
+
+```bash
+VITE_API_URL=http://localhost:8000
+VITE_CLIENT_API_KEY=choose_the_same_client_api_key_as_the_backend
+```
+
+The Hugging Face token should remain only in the project root `.env`, because any `VITE_` variable is exposed to the browser bundle.
+
+## API Integration
+
+The frontend calls the FastAPI backend directly:
+- `POST /chat/`
+- `GET /health/`
+- `GET /admin/mode`
+- `POST /admin/mode`
+- `GET /admin/events`
+- `GET /admin/decisions`
+- `GET /admin/metrics`
+
+## Example Scenarios
+
+Once the backend is running with a valid Hugging Face token, the UI will demonstrate:
 
 ### Example Scenarios
 1. **Safe Prompt**: "What is 2x2?" → ALLOW → LOW → Normal response
@@ -104,9 +126,6 @@ The application uses a custom color palette defined in `tailwind.config.js`:
 - **Success**: Green for allowed actions
 - **Warning**: Amber for sanitized content
 - **Danger**: Red for blocked actions
-
-### API Integration
-The mock API service in `src/services/api.ts` can be easily replaced with real backend calls. Simply update the methods to make actual HTTP requests to your FastAPI backend.
 
 ## Usage Examples
 
