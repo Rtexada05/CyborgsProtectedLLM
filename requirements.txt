@@ -7,3 +7,4 @@ httpx==0.25.2
 Pillow==10.4.0
 pymupdf==1.24.10
 rapidocr-onnxruntime==1.3.24
+qdrant-client==1.11.1

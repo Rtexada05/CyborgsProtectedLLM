@@ -11,6 +11,13 @@ from ...models.schemas import ChatRequest, ChatResponse
 from ..dependencies.auth import get_client_ip, require_client_api_key
 from ...controller.defense_controller import DefenseController
 from ...core.config import settings
+from ...services.conversation_memory import (
+    ConversationMemoryError,
+    ConversationNotFoundError,
+    ConversationOwnershipError,
+    InvalidConversationIdError,
+    shared_conversation_memory,
+)
 from ...services.metrics_logger import shared_metrics_logger
 from ...services.mode_manager import shared_mode_manager
 from ...services.traffic_guard import AdmissionResult, shared_traffic_guard
@@ -21,17 +28,45 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 defense_controller = DefenseController()
 
 
+@router.post("", response_model=ChatResponse, include_in_schema=False)
 @router.post("/", response_model=ChatResponse)
 async def chat(request: ChatRequest, http_request: Request, api_key: str = Depends(require_client_api_key)):
     """Process chat request with protection mechanisms"""
-    trace_id = str(uuid.uuid4())
+    trace_id = getattr(http_request.state, "trace_id", str(uuid.uuid4()))
     client_ip = get_client_ip(http_request)
     api_key_fingerprint = shared_traffic_guard.fingerprint_api_key(api_key)
     admission: AdmissionResult | None = None
+    conversation_id: str | None = None
+    persist_memory = True
 
     try:
         # Always use the global security mode (ignore request mode)
         current_mode = shared_mode_manager.get_mode().value
+
+        try:
+            conversation = await shared_conversation_memory.get_or_create_conversation(request.conversation_id, request.user_id)
+            conversation_id = conversation["conversation_id"]
+            await shared_conversation_memory.append_turn(
+                conversation_id,
+                request.user_id,
+                "user",
+                request.prompt,
+                trace_id=trace_id,
+            )
+        except (InvalidConversationIdError, ConversationNotFoundError):
+            raise
+        except ConversationOwnershipError:
+            raise
+        except ConversationMemoryError as exc:
+            persist_memory = False
+            conversation_id = request.conversation_id or str(uuid.uuid4())
+            await shared_metrics_logger.log_event(
+                event_type="conversation_memory_error",
+                trace_id=trace_id,
+                user_id=request.user_id,
+                details={"error": str(exc), "conversation_id": request.conversation_id},
+            )
+            conversation_id = None
 
         admission = await shared_traffic_guard.admit(
             api_key=api_key,
@@ -65,13 +100,39 @@ async def chat(request: ChatRequest, http_request: Request, api_key: str = Depen
                 mode=current_mode,
                 attachments=request.attachments,
                 requested_tools=request.requested_tools,
+                rag_enabled=request.rag_enabled,
+                rag_scope=request.rag_scope,
+                rag_document_ids=request.rag_document_ids,
                 trace_id=trace_id,
+                conversation_id=conversation_id,
             ),
             timeout=settings.CHAT_REQUEST_TIMEOUT_SECONDS,
         )
 
-        return response
+        if persist_memory and conversation_id:
+            try:
+                await shared_conversation_memory.append_turn(
+                    conversation_id,
+                    request.user_id,
+                    "assistant",
+                    response.response,
+                    decision=response.decision,
+                    risk_level=response.risk_level,
+                    trace_id=trace_id,
+                )
+            except ConversationMemoryError as exc:
+                await shared_metrics_logger.log_event(
+                    event_type="conversation_memory_error",
+                    trace_id=trace_id,
+                    user_id=request.user_id,
+                    details={"error": str(exc), "conversation_id": conversation_id},
+                )
 
+        return response
+    except (InvalidConversationIdError, ConversationNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ConversationOwnershipError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     except asyncio.TimeoutError:
         if admission is not None and admission.admitted:
             await shared_traffic_guard.release(timed_out=True)

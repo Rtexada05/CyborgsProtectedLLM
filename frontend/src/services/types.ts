@@ -6,7 +6,8 @@ export type AttachmentKind = 'image' | 'file';
 export type ToolDecision = 'allowed' | 'denied';
 export type AttachmentDisposition = 'allow' | 'flag' | 'block';
 export type AttachmentExtractionStatus = 'success' | 'partial' | 'failed' | 'metadata_only';
-export type AttachmentExtractionMethod = 'plain_text' | 'json_text' | 'pdf_text' | 'pdf_ocr' | 'image_ocr' | 'none';
+export type AttachmentExtractionMethod = 'plain_text' | 'json_text' | 'pdf_text' | 'pdf_ocr' | 'image_ocr' | 'docx_text' | 'none';
+export type RAGScope = 'default' | 'static_only' | 'user_uploads_only';
 
 export interface AttachmentRef {
   id: string;
@@ -43,6 +44,9 @@ export interface ChatRequest {
   prompt: string;
   attachments?: AttachmentRef[];
   requested_tools?: string[];
+  rag_enabled?: boolean;
+  rag_scope?: RAGScope;
+  rag_document_ids?: string[];
 }
 
 export interface ChatResponse {
@@ -59,6 +63,13 @@ export interface ChatResponse {
   tool_decisions: ToolDecisionMap;
   rag_context_used: boolean;
   rag_context_validated: boolean;
+  rag_retrieval_attempted: boolean;
+  rag_sources_considered: number;
+  rag_chunks_retrieved: number;
+  rag_chunks_used: number;
+  rag_chunks_dropped: number;
+  rag_sources_used: string[];
+  rag_warnings: string[];
   attachments_received: string[];
   attachments_flagged: string[];
   attachment_results: AttachmentResult[];
@@ -111,6 +122,10 @@ export interface DecisionsResponse {
   decisions: AdminDecisionRecord[];
   total_decisions: number;
   limit: number;
+  page: number;
+  total_pages: number;
+  has_previous: boolean;
+  has_next: boolean;
   timestamp: string;
 }
 
@@ -118,6 +133,7 @@ export interface AdminMetricsResponse {
   traffic: {
     total_chat_traces: number;
     total_decision_records: number;
+    requests_without_decision_record: number;
     requests_per_hour: number;
   };
   decisions: {
@@ -132,12 +148,31 @@ export interface AdminMetricsResponse {
     medium_risk_rate_percent: number;
     low_risk_rate_percent: number;
   };
-  kpis: {
-    attack_success_rate_percent: number;
-    false_positive_proxy_percent: number;
-    throughput_rps_placeholder: number | null;
-    latency_p50_ms_placeholder: number | null;
-    latency_p95_ms_placeholder: number | null;
+  evaluation: {
+    labeled_samples: number;
+    pending_reviews: number;
+    confusion_matrix: {
+      tp: number;
+      fp: number;
+      tn: number;
+      fn: number;
+    };
+    fpr: number | null;
+    asr: number | null;
+    fpr_denominator: number;
+    asr_denominator: number;
+  };
+  rag?: {
+    enabled: boolean;
+    provider: string;
+    collection_name: string;
+    backend: string;
+    point_count: number;
+    source_count: number;
+    quarantined_source_count: number;
+    embedding: Record<string, any>;
+    indexed_at: string;
+    warnings: string[];
   };
   generated_at: string;
 }
@@ -161,5 +196,12 @@ export interface ChatMessage {
   tool_decisions?: ToolDecisionMap;
   rag_context_used?: boolean;
   rag_context_validated?: boolean;
+  rag_retrieval_attempted?: boolean;
+  rag_sources_considered?: number;
+  rag_chunks_retrieved?: number;
+  rag_chunks_used?: number;
+  rag_chunks_dropped?: number;
+  rag_sources_used?: string[];
+  rag_warnings?: string[];
   model_called?: boolean;
 }

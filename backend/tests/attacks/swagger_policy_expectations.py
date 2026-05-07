@@ -70,7 +70,8 @@ EXPECTED_POLICY: Dict[Tuple[str, str], PolicyExpectation] = {
         decisions={"SANITIZE", "BLOCK"},
         risk_levels={"MEDIUM", "HIGH", "CRITICAL"},
     ),
-    # Strong mode target: clear attacks should be blocked at high severity.
+    # Strong mode target: clear attacks should still be blocked at high severity,
+    # even though Strong now allows truly low-risk traffic.
     ("Strong", "direct_prompt_injection"): PolicyExpectation(
         decisions={"BLOCK"},
         risk_levels={"HIGH", "CRITICAL"},

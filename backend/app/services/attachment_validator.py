@@ -19,6 +19,7 @@ class AttachmentValidator:
         "text/csv",
         "application/json",
         "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }
     _MAX_BYTES = 1_500_000
 

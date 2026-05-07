@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from io import BytesIO
 import json
+import re
 from typing import Dict, List, Optional, Tuple
+from xml.etree import ElementTree
+from zipfile import BadZipFile, ZipFile
 
 from ..models.schemas import AttachmentRef
 
@@ -111,6 +114,16 @@ class AttachmentTextExtractor:
                 extraction_reason=f"{direct_reason};ocr_fallback:{ocr_reason}",
                 page_count=ocr_page_count or page_count or None,
             )
+
+        if mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            text, reason = self._extract_docx_text(decoded_bytes)
+            if text:
+                return self._text_result(
+                    text=text,
+                    extraction_method="docx_text",
+                    extraction_reason=reason,
+                )
+            return self._failed_result(extraction_reason=reason)
 
         if mime_type in {"image/png", "image/jpeg", "image/webp"}:
             image_text, page_count, image_reason = self._extract_image_text(decoded_bytes)
@@ -284,3 +297,51 @@ class AttachmentTextExtractor:
         if not normalized:
             return "", "ocr_no_text_detected"
         return normalized, "ocr_text_extracted"
+
+    def _extract_docx_text(self, decoded_bytes: bytes) -> Tuple[str, str]:
+        try:
+            with ZipFile(BytesIO(decoded_bytes)) as archive:
+                document_xml = archive.read("word/document.xml")
+        except KeyError:
+            return "", "docx_document_xml_missing"
+        except BadZipFile:
+            return "", "docx_invalid_zip"
+        except Exception:
+            return "", "docx_read_failed"
+
+        try:
+            root = ElementTree.fromstring(document_xml)
+        except ElementTree.ParseError:
+            return "", "docx_xml_parse_failed"
+
+        namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        paragraphs: List[str] = []
+
+        for paragraph in root.findall(".//w:p", namespace):
+            parts: List[str] = []
+            for node in paragraph.iter():
+                tag = self._local_name(node.tag)
+                if tag == "t" and node.text:
+                    parts.append(node.text)
+                elif tag in {"tab"}:
+                    parts.append("\t")
+                elif tag in {"br", "cr"}:
+                    parts.append("\n")
+            paragraph_text = "".join(parts).strip()
+            if paragraph_text:
+                paragraphs.append(paragraph_text)
+
+        normalized = self._normalize_docx_text("\n".join(paragraphs))
+        if not normalized:
+            return "", "docx_no_text_detected"
+        return normalized, "docx_text_extracted"
+
+    def _normalize_docx_text(self, text: str) -> str:
+        if not text:
+            return ""
+        return self._normalize_text(re.sub(r"\n{3,}", "\n\n", text))
+
+    def _local_name(self, tag: str) -> str:
+        if "}" in tag:
+            return tag.rsplit("}", 1)[1]
+        return tag

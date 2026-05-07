@@ -39,7 +39,13 @@ class ApiService {
 
       try {
         const errorPayload = await response.json();
-        message = errorPayload.detail || errorPayload.message || message;
+        if (typeof errorPayload.detail === 'string') {
+          message = errorPayload.detail;
+        } else if (errorPayload.detail && typeof errorPayload.detail === 'object') {
+          message = errorPayload.detail.message || errorPayload.detail.code || message;
+        } else if (typeof errorPayload.message === 'string') {
+          message = errorPayload.message;
+        }
       } catch {
         // Leave the default message when the response body is not JSON.
       }
@@ -72,8 +78,8 @@ class ApiService {
     return this.request<EventsResponse>(`/admin/events?limit=${limit}`);
   }
 
-  async getDecisions(limit: number = 50): Promise<DecisionsResponse> {
-    return this.request<DecisionsResponse>(`/admin/decisions?limit=${limit}`);
+  async getDecisions(page: number = 1, limit: number = 10): Promise<DecisionsResponse> {
+    return this.request<DecisionsResponse>(`/admin/decisions?page=${page}&limit=${limit}`);
   }
 
   async getMetrics(): Promise<AdminMetricsResponse> {

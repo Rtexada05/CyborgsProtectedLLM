@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrendingUp, Users, Shield, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Shield, TrendingDown, TrendingUp, Users } from 'lucide-react';
 
 interface MetricsCardProps {
   title: string;
@@ -21,47 +21,48 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({
   const getColorClasses = () => {
     switch (color) {
       case 'success':
-        return 'bg-success-50 text-success-700 border-success-200';
+        return 'border-success-400/25 bg-success-500/15 text-success-100';
       case 'warning':
-        return 'bg-warning-50 text-warning-700 border-warning-200';
+        return 'border-warning-400/25 bg-warning-500/15 text-warning-100';
       case 'danger':
-        return 'bg-danger-50 text-danger-700 border-danger-200';
+        return 'border-danger-400/25 bg-danger-500/15 text-danger-100';
       case 'primary':
-        return 'bg-primary-50 text-primary-700 border-primary-200';
+        return 'border-primary-400/25 bg-primary-500/15 text-primary-100';
       default:
-        return 'bg-gray-50 text-gray-700 border-gray-200';
+        return 'border-white/10 bg-white/5 text-cyber-100';
     }
   };
 
   const getChangeColor = () => {
     if (change === undefined) return '';
-    return change > 0 ? 'text-success-600' : change < 0 ? 'text-danger-600' : 'text-gray-600';
+    return change > 0 ? 'text-success-200' : change < 0 ? 'text-danger-100' : 'text-cyber-300';
   };
 
   const getChangeIcon = () => {
     if (change === undefined) return null;
-    return change > 0 ? '↑' : change < 0 ? '↓' : '→';
+    if (change > 0) return <TrendingUp className="h-4 w-4" />;
+    if (change < 0) return <TrendingDown className="h-4 w-4" />;
+    return <div className="h-2 w-2 rounded-full bg-cyber-400" />;
   };
 
   return (
-    <div className="metric-card">
-      <div className="flex items-center justify-between mb-4">
-        <div className={`p-2 rounded-lg ${getColorClasses()}`}>
+    <div className="metric-card animate-enter">
+      <div className="mb-4 flex items-start justify-between">
+        <div className={`rounded-2xl border p-3 ${getColorClasses()}`}>
           {icon}
         </div>
         {change !== undefined && (
-          <div className={`flex items-center space-x-1 text-sm font-medium ${getChangeColor()}`}>
-            <span>{getChangeIcon()}</span>
+          <div className={`flex items-center gap-1 text-sm font-medium ${getChangeColor()}`}>
+            {getChangeIcon()}
             <span>{Math.abs(change)}%</span>
           </div>
         )}
       </div>
-      
       <div>
-        <h3 className="text-2xl font-bold text-gray-900">{value}</h3>
-        <p className="text-sm text-gray-600 mt-1">{title}</p>
+        <p className="text-sm uppercase tracking-[0.22em] text-cyber-400">{title}</p>
+        <h3 className="mt-2 text-3xl font-semibold text-white">{value}</h3>
         {subtitle && (
-          <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
+          <p className="mt-2 text-sm text-cyber-300">{subtitle}</p>
         )}
       </div>
     </div>
@@ -72,13 +73,17 @@ interface MetricsOverviewProps {
   metrics: {
     traffic: {
       total_chat_traces: number;
+      total_decision_records: number;
+      requests_without_decision_record: number;
     };
     decisions: {
       distribution: Record<string, number>;
     };
-    kpis: {
-      attack_success_rate_percent: number;
-      false_positive_proxy_percent: number;
+    evaluation: {
+      labeled_samples: number;
+      pending_reviews: number;
+      fpr: number | null;
+      asr: number | null;
     };
   } | null;
   isLoading: boolean;
@@ -87,12 +92,12 @@ interface MetricsOverviewProps {
 export const MetricsOverview: React.FC<MetricsOverviewProps> = ({ metrics, isLoading }) => {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {[...Array(6)].map((_, i) => (
           <div key={i} className="metric-card animate-pulse">
-            <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-            <div className="h-8 bg-gray-200 rounded w-3/4 mb-2"></div>
-            <div className="h-3 bg-gray-200 rounded w-full"></div>
+            <div className="mb-4 h-4 w-1/2 rounded bg-white/10"></div>
+            <div className="mb-2 h-8 w-3/4 rounded bg-white/10"></div>
+            <div className="h-3 w-full rounded bg-white/10"></div>
           </div>
         ))}
       </div>
@@ -101,24 +106,27 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({ metrics, isLoa
 
   if (!metrics) {
     return (
-      <div className="text-center py-8">
-        <p className="text-gray-500">No metrics available</p>
+      <div className="py-8 text-center">
+        <p className="text-cyber-300">No metrics available</p>
       </div>
     );
   }
 
+  const asrPercent = metrics.evaluation.asr === null ? null : metrics.evaluation.asr * 100;
+  const fprPercent = metrics.evaluation.fpr === null ? null : metrics.evaluation.fpr * 100;
+
   const metricCards = [
     {
-      title: 'Total Requests',
-      value: metrics.traffic.total_chat_traces.toLocaleString(),
+      title: 'Completed Requests',
+      value: metrics.traffic.total_decision_records.toLocaleString(),
       icon: <Users className="h-5 w-5" />,
       color: 'primary' as const,
-      subtitle: 'All chat interactions'
+      subtitle: `${metrics.traffic.requests_without_decision_record.toLocaleString()} attempts failed before decision`
     },
     {
       title: 'Allowed Requests',
       value: (metrics.decisions.distribution.ALLOW || 0).toLocaleString(),
-      change: ((metrics.decisions.distribution.ALLOW || 0) / Math.max(metrics.traffic.total_chat_traces, 1)) * 100,
+      change: ((metrics.decisions.distribution.ALLOW || 0) / Math.max(metrics.traffic.total_decision_records, 1)) * 100,
       icon: <Shield className="h-5 w-5" />,
       color: 'success' as const,
       subtitle: 'Passed security checks'
@@ -126,7 +134,7 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({ metrics, isLoa
     {
       title: 'Sanitized Requests',
       value: (metrics.decisions.distribution.SANITIZE || 0).toLocaleString(),
-      change: ((metrics.decisions.distribution.SANITIZE || 0) / Math.max(metrics.traffic.total_chat_traces, 1)) * 100,
+      change: ((metrics.decisions.distribution.SANITIZE || 0) / Math.max(metrics.traffic.total_decision_records, 1)) * 100,
       icon: <AlertTriangle className="h-5 w-5" />,
       color: 'warning' as const,
       subtitle: 'Cleaned before processing'
@@ -134,29 +142,33 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({ metrics, isLoa
     {
       title: 'Blocked Requests',
       value: (metrics.decisions.distribution.BLOCK || 0).toLocaleString(),
-      change: ((metrics.decisions.distribution.BLOCK || 0) / Math.max(metrics.traffic.total_chat_traces, 1)) * 100,
+      change: ((metrics.decisions.distribution.BLOCK || 0) / Math.max(metrics.traffic.total_decision_records, 1)) * 100,
       icon: <TrendingUp className="h-5 w-5" />,
       color: 'danger' as const,
       subtitle: 'Security violations'
     },
     {
       title: 'Attack Success Rate',
-      value: `${metrics.kpis.attack_success_rate_percent.toFixed(1)}%`,
+      value: asrPercent === null ? 'N/A' : `${asrPercent.toFixed(1)}%`,
       icon: <TrendingUp className="h-5 w-5" />,
-      color: (metrics.kpis.attack_success_rate_percent > 50 ? 'danger' as const : metrics.kpis.attack_success_rate_percent > 20 ? 'warning' as const : 'success' as const),
-      subtitle: 'Lower is better'
+      color: (asrPercent === null ? 'primary' as const : asrPercent > 50 ? 'danger' as const : asrPercent > 20 ? 'warning' as const : 'success' as const),
+      subtitle: asrPercent === null
+        ? `Needs reviewed attack samples (${metrics.evaluation.labeled_samples} labeled)`
+        : 'Lower is better'
     },
     {
       title: 'False Positive Rate',
-      value: `${metrics.kpis.false_positive_proxy_percent.toFixed(1)}%`,
+      value: fprPercent === null ? 'N/A' : `${fprPercent.toFixed(1)}%`,
       icon: <AlertTriangle className="h-5 w-5" />,
-      color: (metrics.kpis.false_positive_proxy_percent > 15 ? 'danger' as const : metrics.kpis.false_positive_proxy_percent > 5 ? 'warning' as const : 'success' as const),
-      subtitle: 'Lower is better'
+      color: (fprPercent === null ? 'primary' as const : fprPercent > 15 ? 'danger' as const : fprPercent > 5 ? 'warning' as const : 'success' as const),
+      subtitle: fprPercent === null
+        ? `Needs reviewed benign samples (${metrics.evaluation.labeled_samples} labeled)`
+        : 'Lower is better'
     }
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
       {metricCards.map((card, index) => (
         <MetricsCard key={index} {...card} />
       ))}

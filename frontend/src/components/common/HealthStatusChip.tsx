@@ -15,13 +15,13 @@ export const HealthStatusChip: React.FC<HealthStatusChipProps> = ({
   const getStatusColor = () => {
     switch (status) {
       case 'ok':
-        return 'bg-success-100 text-success-800 border-success-200';
+        return 'border-success-400/25 bg-success-500/15 text-success-100';
       case 'warning':
-        return 'bg-warning-100 text-warning-800 border-warning-200';
+        return 'border-warning-400/25 bg-warning-500/15 text-warning-100';
       case 'error':
-        return 'bg-danger-100 text-danger-800 border-danger-200';
+        return 'border-danger-400/25 bg-danger-500/15 text-danger-100';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'border-white/15 bg-white/10 text-cyber-100';
     }
   };
 
@@ -52,7 +52,7 @@ export const HealthStatusChip: React.FC<HealthStatusChipProps> = ({
   };
 
   return (
-    <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full border text-sm font-medium ${getStatusColor()} ${className}`}>
+    <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium shadow-[0_0_0_1px_rgba(255,255,255,0.02)] ${getStatusColor()} ${className}`}>
       {getStatusIcon()}
       <span>{getStatusText()}</span>
       {message && <span className="text-xs opacity-75">({message})</span>}

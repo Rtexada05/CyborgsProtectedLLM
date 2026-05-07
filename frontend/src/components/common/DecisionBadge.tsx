@@ -1,4 +1,5 @@
 import React from 'react';
+import { AlertTriangle, Ban, CheckCircle2 } from 'lucide-react';
 import { Decision, RiskLevel } from '../../services/types';
 
 interface DecisionBadgeProps {
@@ -16,26 +17,26 @@ export const DecisionBadge: React.FC<DecisionBadgeProps> = ({ decision, classNam
       case 'BLOCK':
         return 'decision-block';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'border-white/10 bg-white/10 text-cyber-100';
     }
   };
 
   const getIcon = () => {
     switch (decision) {
       case 'ALLOW':
-        return '✓';
+        return <CheckCircle2 className="h-4 w-4" />;
       case 'SANITIZE':
-        return '⚠';
+        return <AlertTriangle className="h-4 w-4" />;
       case 'BLOCK':
-        return '✕';
+        return <Ban className="h-4 w-4" />;
       default:
-        return '?';
+        return null;
     }
   };
 
   return (
     <span className={`decision-badge ${getDecisionClass()} ${className}`}>
-      <span className="mr-1">{getIcon()}</span>
+      {getIcon()}
       {decision}
     </span>
   );
@@ -58,27 +59,27 @@ export const RiskIndicator: React.FC<RiskIndicatorProps> = ({ riskLevel, classNa
       case 'CRITICAL':
         return 'risk-critical';
       default:
-        return 'bg-gray-50 text-gray-700';
+        return 'border border-white/10 bg-white/10 text-cyber-100';
     }
   };
 
   const getRiskColor = () => {
     switch (riskLevel) {
       case 'LOW':
-        return 'text-success-600';
+        return 'text-success-100';
       case 'MEDIUM':
-        return 'text-warning-600';
+        return 'text-warning-100';
       case 'HIGH':
-        return 'text-danger-600';
+        return 'text-danger-100';
       case 'CRITICAL':
-        return 'text-danger-800';
+        return 'text-danger-50';
       default:
-        return 'text-gray-600';
+        return 'text-cyber-200';
     }
   };
 
   return (
-    <div className={`px-3 py-1 rounded-full text-sm font-medium ${getRiskClass()} ${className}`}>
+    <div className={`rounded-full px-3 py-1.5 text-sm font-medium ${getRiskClass()} ${className}`}>
       <span className={`font-semibold ${getRiskColor()}`}>{riskLevel}</span>
     </div>
   );

@@ -2,6 +2,8 @@
 
 import os
 import sys
+from io import BytesIO
+from zipfile import ZipFile
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -16,6 +18,13 @@ def _attachment(name: str, mime_type: str) -> AttachmentRef:
         mime_type=mime_type,
         kind="image" if mime_type.startswith("image/") else "file",
     )
+
+
+def _docx_bytes(document_xml: str) -> bytes:
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", document_xml)
+    return buffer.getvalue()
 
 
 def test_pdf_text_extraction_prefers_direct_text(monkeypatch):
@@ -114,3 +123,48 @@ def test_plain_text_extraction_is_truncated_to_storage_budget():
     assert result["extraction_status"] == "partial"
     assert result["extracted_chars"] == 9000
     assert len(result["text_preview"]) == extractor.MAX_EXTRACTED_CHARS
+
+
+def test_docx_extraction_returns_structured_text_preview():
+    extractor = AttachmentTextExtractor()
+    attachment = _attachment(
+        "brief.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    payload = _docx_bytes(
+        """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:body>
+            <w:p><w:r><w:t>Quarterly roadmap</w:t></w:r></w:p>
+            <w:p><w:r><w:t>Hiring plan</w:t></w:r></w:p>
+          </w:body>
+        </w:document>"""
+    )
+
+    result = extractor.extract(attachment, payload)
+
+    assert result["metadata_only"] is False
+    assert result["extraction_method"] == "docx_text"
+    assert result["extraction_status"] == "success"
+    assert result["text_preview"] == "Quarterly roadmap\nHiring plan"
+
+
+def test_docx_extraction_uses_parsed_text(monkeypatch):
+    extractor = AttachmentTextExtractor()
+    attachment = _attachment(
+        "brief.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+    monkeypatch.setattr(
+        extractor,
+        "_extract_docx_text",
+        lambda _decoded_bytes: ("Quarterly roadmap\nHiring plan", "docx_text_extracted"),
+    )
+
+    result = extractor.extract(attachment, b"docx-bytes")
+
+    assert result["metadata_only"] is False
+    assert result["extraction_method"] == "docx_text"
+    assert result["ocr_used"] is False
+    assert "Quarterly roadmap" in result["text_preview"]

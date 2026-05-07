@@ -14,23 +14,15 @@ export const ToolRequestBadge: React.FC<ToolRequestBadgeProps> = ({ tool, allowe
 
   const getBadgeClass = () => {
     return allowed
-      ? 'bg-success-100 text-success-800 border border-success-200'
-      : 'bg-danger-100 text-danger-800 border border-danger-200';
-  };
-
-  const getIcon = () => {
-    return allowed ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />;
-  };
-
-  const getToolIcon = () => {
-    return <Wrench className="h-4 w-4" />;
+      ? 'border border-success-400/20 bg-success-500/15 text-success-100'
+      : 'border border-danger-400/20 bg-danger-500/15 text-danger-100';
   };
 
   return (
-    <span className={`inline-flex items-center space-x-1 rounded-full px-3 py-1.5 text-sm font-medium ${getBadgeClass()}`}>
-      {getToolIcon()}
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ${getBadgeClass()}`}>
+      <Wrench className="h-4 w-4" />
       <span>{formattedTool}</span>
-      {getIcon()}
+      {allowed ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
     </span>
   );
 };

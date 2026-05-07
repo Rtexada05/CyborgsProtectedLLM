@@ -39,6 +39,10 @@ class TextSanitizer:
             (r"(?i)security\s*(?:policy|rule|protocol)", "[REDACTED_SECURITY_POLICY]"),
             (r"(?i)filter\s*(?:rule|pattern|logic)", "[REDACTED_FILTER_RULE]"),
             (r"(?i)detection\s*(?:mechanism|algorithm)", "[REDACTED_DETECTION]"),
+
+            # Prompt-exfiltration and jailbreak redactions
+            (r"(?i)\bflag\{[^}]+\}", "[REDACTED_FLAG_TOKEN]"),
+            (r"(?i)\b(?:DAN|Do Anything Now|developer mode|debug mode|god mode)\b", "[REDACTED_JAILBREAK_PERSONA]"),
         ]
         
         # Tool directive removal patterns
@@ -159,6 +163,9 @@ class TextSanitizer:
             r"(?i)(ignore|forget|disregard).*(previous|earlier)",
             r"(?i)(jailbreak|bypass).*(security|protection)",
             r"(?i)\[START\]|\[END\]|\[BEGIN\]|\[FINISH\]",
+            r"(?i)\b(?:you are now|you are|act as|pretend(?: to be)?|from now on)\b[^.!?\n]*",
+            r"(?i)\bcapture the flag\b",
+            r"(?i)\b(?:reveal|show|display|print|give)\s+(?:me\s+)?(?:the\s+)?flag\b",
         ]
         
         for pattern in medium_patterns:

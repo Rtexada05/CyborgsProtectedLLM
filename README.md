@@ -1,117 +1,154 @@
 # Cyborgs Protected Chat System
 
-FastAPI + React application for evaluating and demonstrating defenses against prompt injection, RAG poisoning, steganographic content, attachment-based attacks, tool abuse, and basic volume attacks.
+FastAPI + React/Vite application for experimenting with defensive controls around LLM chat. The project is built as a protected gateway that evaluates prompts, attachments, retrieval context, and tool requests before deciding whether to allow, sanitize, or block a request.
 
-The repository currently contains:
+It is best understood as a security-focused demo and evaluation harness, not a production-ready chat platform.
 
-- A FastAPI backend with a defense pipeline, admin APIs, in-memory metrics, and abuse protection
-- A React/Vite frontend for chat, admin mode control, dashboard metrics, and decision logs
-- A backend test suite covering auth, security decisions, tools, attachments, abuse protection, and attack-corpus runs
+## What This Repository Includes
 
-## What The Project Does
+- A FastAPI backend with a layered defense pipeline
+- A React frontend with chat, dashboard, admin, and decision-log views
+- Local RAG indexing and retrieval with poisoned-corpus handling
+- Attachment validation, extraction, OCR fallback, and content-risk analysis
+- Tool intent detection, authorization, and deterministic tool execution
+- Local SQLite-backed conversation memory and evaluation review storage
+- In-memory rate limiting, concurrency caps, timeout handling, and spike alerts
+- A backend-heavy test suite covering chat policy, attachments, RAG, tools, auth, memory, and attack-corpus runs
 
-The backend accepts chat requests, runs them through a layered security pipeline, then either:
+## Core Behavior
 
-- `ALLOW`s the request
-- `SANITIZE`s the prompt/context before model execution
-- `BLOCK`s the request before it reaches the model
+Every `POST /chat/` request is processed through a security pipeline that can return one of three outcomes:
 
-The pipeline currently includes:
+- `ALLOW`: request is considered safe enough to run normally
+- `SANITIZE`: risky text/context is cleaned before model execution
+- `BLOCK`: request is rejected before the model is allowed to answer
 
-- Prompt injection detection
-- RAG context retrieval and validation
-- Tool request detection and authorization
-- Attachment validation, extraction, and signal analysis
-- Steganography checks
-- Risk scoring and mode-based policy decisions
-- In-memory rate limiting and concurrency protection on `/chat/`
+The backend returns structured telemetry with each chat response, including:
 
-The frontend exposes that system through four tabs:
+- `decision` and `risk_level`
+- `trace_id` for request correlation
+- tool request and authorization results
+- RAG retrieval and validation metadata
+- attachment extraction and security results
+- conversation-memory usage stats
+- whether the model was actually called
 
-- `Chat`: secure chat UI with tool toggles and file/image attachment upload
-- `Dashboard`: aggregated metrics and KPI cards
-- `Admin`: global security mode selector
-- `Logs`: recent decision records
+## Defense Pipeline
 
-## Current Architecture
+The main orchestration lives in [backend/app/controller/defense_controller.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/controller/defense_controller.py).
 
-### Backend
+At a high level, each chat request goes through:
 
-Main backend areas:
+1. Trace ID assignment and request counting middleware
+2. Client API key validation
+3. Conversation creation or lookup
+4. Traffic-guard admission checks
+5. Prompt analysis for injection, obfuscation, jailbreak, and risky patterns
+6. Attachment inspection, text extraction, OCR fallback, and signal analysis
+7. Optional upload indexing into the local RAG store
+8. Optional steganography checks
+9. Optional secure RAG retrieval and chunk validation
+10. Conversation-memory replay
+11. Tool detection and tool authorization
+12. Risk scoring and mode-based policy decisioning
+13. Prompt/context sanitization when required
+14. LLM or deterministic fallback response generation
+15. Decision/event logging and evaluation-record persistence
 
-- `backend/app/api/routes`
-  - `chat.py`: protected chat endpoint
-  - `admin.py`: mode, events, decisions, metrics
-  - `health.py`: health check
-- `backend/app/controller`
-  - `defense_controller.py`: orchestrates the full protection pipeline
-- `backend/app/services`
-  - `input_content_checker.py`: prompt injection and suspicious pattern analysis
-  - `policy_engine.py`: risk scoring and allow/sanitize/block decisions
-  - `rag_manager.py`: retrieves local benign/poisoned text corpus
-  - `rag_content_validator.py`: validates retrieved context before use
-  - `tool_gatekeeper.py`: tool detection and authorization policy
-  - `tool_plugins.py`: calculator, file reader, web, database, and deny-by-policy write/command plugins
-  - `attachment_manager.py`: attachment validation, extraction, and signal aggregation
-  - `steganography_detector.py`: hidden-content signal checks
-  - `metrics_logger.py`: in-memory events, decisions, admin KPIs
-  - `traffic_guard.py`: in-memory rate limiting, quota enforcement, concurrency cap, and spike alerts
-  - `llm_service.py`: Hugging Face router integration with deterministic fallback
-- `backend/app/data/rag`
-  - benign and poisoned sample RAG documents used by tests and demo flows
+## Security Modes
 
-### Frontend
+The active security mode is global and managed server-side through the admin API. The chat request body does not control the effective mode.
 
-Main frontend areas:
-
-- `frontend/src/App.tsx`: top-level tabbed app shell
-- `frontend/src/hooks/useChat.ts`: chat request lifecycle
-- `frontend/src/hooks/useAdmin.ts`: admin mode + metrics loading
-- `frontend/src/services/api.ts`: backend API client
-- `frontend/src/components/chat`: chat window, composer, response rendering, tool and RAG badges
-- `frontend/src/components/dashboard`: dashboard KPI cards
-- `frontend/src/components/admin`: security mode selector
-- `frontend/src/components/logs`: recent decision table
-
-## Security Features Implemented
-
-### 1. Prompt Injection Protection
-
-The system analyzes prompts for suspicious patterns such as:
-
-- instruction override attempts
-- role manipulation
-- prompt leakage attempts
-- encoding/obfuscation indicators
-- multi-step and structural attack patterns
-
-The result feeds into risk scoring and mode-specific policy decisions.
-
-### 2. Security Modes
-
-The backend uses a single global security mode:
+Supported modes:
 
 - `Off`
 - `Weak`
 - `Normal`
 - `Strong`
 
-The request body does not control the active mode. `/chat/` always uses the global mode from the admin state.
+Mode changes are handled by the shared mode manager and exposed through `/admin/mode`.
 
-### 3. RAG Validation
+## Major Security Features
 
-The project includes a local document corpus with both benign and poisoned documents. When prompts trigger retrieval behavior, the backend:
+### Prompt Injection and Obfuscation Detection
 
-- retrieves matching local contexts
-- validates them
-- strips unsafe content before the model sees it
-- records whether context was used and whether it validated safely
+The backend analyzes prompts for signals such as:
 
-### 4. Tool Abuse Prevention
+- instruction override attempts
+- system or developer prompt references
+- prompt leakage attempts
+- jailbreak patterns
+- encoded or obfuscated content
+- suspicious structural or role-manipulation patterns
 
-Tool intent can be inferred from the prompt or passed explicitly in `requested_tools`.
+Relevant modules:
 
-Supported tool names:
+- [backend/app/services/input_content_checker.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/input_content_checker.py)
+- [backend/app/utils/text_sanitizer.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/utils/text_sanitizer.py)
+- [backend/app/services/policy_engine.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/policy_engine.py)
+
+### Secure RAG and Poisoned Context Handling
+
+The backend includes a local corpus under [backend/app/data/rag](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/data/rag) with:
+
+- trusted documents
+- benign documents
+- quarantined or poisoned sample documents
+
+RAG behavior includes:
+
+- deterministic local embeddings
+- an in-memory Qdrant-compatible vector store
+- chunking and indexing of static documents
+- optional indexing of uploaded attachment text
+- per-user isolation for uploaded documents
+- quarantine of risky sources
+- validation and optional sanitization of retrieved chunks
+- hard caps on chunks, context size, and per-source usage
+
+Relevant modules:
+
+- [backend/app/services/rag_manager.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/rag_manager.py)
+- [backend/app/services/rag_content_validator.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/rag_content_validator.py)
+- [backend/app/services/vector_store.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/vector_store.py)
+- [backend/app/services/embedding_service.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/embedding_service.py)
+
+### Attachment Defense
+
+Attachments are accepted as structured base64 payloads and pass through:
+
+- MIME/type validation
+- bounded payload inspection
+- text extraction for text-like files
+- direct PDF extraction where possible
+- OCR fallback for PDFs and images when supported
+- signal analysis on extracted text
+- per-attachment allow/flag/block dispositioning
+
+Supported attachment result metadata includes:
+
+- `disposition`
+- `flags`
+- `text_preview`
+- `extraction_status`
+- `extraction_method`
+- `ocr_used`
+- `page_count`
+- derived `signals`
+
+Relevant modules:
+
+- [backend/app/services/attachment_manager.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/attachment_manager.py)
+- [backend/app/services/attachment_validator.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/attachment_validator.py)
+- [backend/app/services/attachment_text_extractor.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/attachment_text_extractor.py)
+- [backend/app/services/attachment_signal_analyzer.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/attachment_signal_analyzer.py)
+- [backend/app/services/steganography_detector.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/steganography_detector.py)
+
+### Tool Abuse Prevention
+
+The system detects requested tool usage from the prompt and/or the explicit `requested_tools` field.
+
+Registered tool names:
 
 - `calculator`
 - `file_reader`
@@ -120,75 +157,158 @@ Supported tool names:
 - `write_file`
 - `execute_command`
 
-Current behavior:
+Current tool behavior:
 
-- `write_file` and `execute_command` are deny-by-policy plugins
-- `file_reader`, `web`, and `database` are mode- and risk-gated
-- `calculator` is the most permissive tool
-- tool execution is audited and time-bounded
+- `calculator` executes deterministic arithmetic expressions
+- `file_reader` is restricted to repository-safe paths or uploaded attachment previews
+- `web` is restricted to a strict allowlist (`example.com` and `www.example.com`)
+- `database` is a seeded in-memory SQLite demo database
+- `write_file` is deny-by-policy
+- `execute_command` is deny-by-policy
 
-### 5. Attachment Handling
+Tool execution is time-bounded and audited.
 
-The chat API supports structured attachments with base64 content. The pipeline validates and analyzes:
+Relevant modules:
 
-- plain text
-- CSV
-- JSON
-- PDF
-- PNG
-- JPEG
-- WebP
+- [backend/app/services/tool_gatekeeper.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/tool_gatekeeper.py)
+- [backend/app/services/tool_plugins.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/tool_plugins.py)
 
-Attachment flow:
+### Traffic and Volume Attack Protection
 
-- validate MIME and payload
-- extract bounded text previews
-- use direct PDF text extraction where possible
-- fall back to OCR for PDFs/images when dependencies are available
-- analyze extracted text for risky signals
-- allow, flag, or block the attachment
+The chat endpoint is protected by an in-process traffic guard that enforces:
 
-### 6. Volume-Attack Protection
-
-`/chat/` now has in-memory abuse protection:
-
-- per-IP rate limit
-- per-API-key rate limit
+- per-IP rate limits
+- per-client-key rate limits
 - optional per-user minute and daily quotas
-- global in-flight request cap
-- hard request timeout
-- spike detection surfaced through admin metrics/events
+- maximum in-flight chat requests
+- request timeout accounting
+- request-spike alerts
 
-Important limitation:
+Important scope limit:
 
-- this is single-instance protection only
+- these controls are single-instance only
 - counters live in memory
-- limits are not globally correct across multiple workers or multiple app instances
+- they are not shared across workers, containers, or machines
 
-## API Summary
+Relevant module:
 
-### Public / Main Routes
+- [backend/app/services/traffic_guard.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/services/traffic_guard.py)
+
+## Persistence and Data Stores
+
+The project uses both persistent and in-memory storage:
+
+- `backend/data/chat_memory.sqlite`: conversation transcripts and turn history
+- `backend/data/evaluation.sqlite`: evaluation records and review labels
+- in-memory vector index for current RAG data
+- in-memory runtime metrics, event buffers, and abuse-protection counters
+
+Conversation memory behavior:
+
+- conversations are identified by UUID
+- full transcripts are stored locally
+- only bounded recent turns are replayed to the model
+- blocked or sanitized turns can be excluded via settings
+
+Evaluation store behavior:
+
+- every decision becomes a predicted label
+- `ALLOW` maps to predicted `benign`
+- `SANITIZE` and `BLOCK` map to predicted `attack`
+- admin review endpoints allow attachment of ground-truth labels
+- labeled metrics include FPR, ASR, and a confusion matrix
+
+## Backend Architecture
+
+### Main Backend Packages
+
+- `backend/app/main.py`: FastAPI app creation, lifespan setup, CORS, root route, global exception handler
+- `backend/app/api/routes`: route modules for `chat`, `admin`, and `health`
+- `backend/app/api/dependencies/auth.py`: client/admin API key enforcement and client IP extraction
+- `backend/app/controller`: defense orchestration
+- `backend/app/core`: settings, logging, and security-mode configuration
+- `backend/app/models`: Pydantic schemas for request/response contracts
+- `backend/app/services`: defense, tooling, RAG, storage, metrics, traffic control, and model access
+- `backend/app/utils`: text sanitization helpers
+- `backend/app/data/rag`: static trusted, benign, and poisoned RAG sources
+
+### Main Backend Endpoints
+
+Public routes:
 
 - `GET /`
 - `GET /health/`
+- `POST /chat`
 - `POST /chat/`
 
-### Admin Routes
+Admin routes:
 
-- `POST /admin/mode`
 - `GET /admin/mode`
+- `POST /admin/mode`
 - `GET /admin/events`
 - `GET /admin/events/old`
 - `GET /admin/decisions`
 - `GET /admin/metrics`
+- `POST /admin/reset-runtime`
+- `GET /admin/evaluations`
+- `GET /admin/evaluations/{trace_id}`
+- `POST /admin/evaluations/{trace_id}/review`
+- `GET /admin/rag/status`
+- `GET /admin/rag/sources`
+- `POST /admin/rag/reindex`
+- `GET /admin/conversations`
+- `GET /admin/conversations/{conversation_id}`
 
-## Chat Request Contract
+### Authentication Model
 
-`POST /chat/` expects:
+All protected routes use the `X-API-Key` header.
+
+- `POST /chat/` requires `CLIENT_API_KEY`
+- `/admin/*` requires `ADMIN_API_KEY` when configured
+- if `ADMIN_API_KEY` is not set, admin routes fall back to `CLIENT_API_KEY`
+
+This behavior is implemented in [backend/app/api/dependencies/auth.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/api/dependencies/auth.py).
+
+## Frontend Architecture
+
+The frontend lives under `frontend/` and is a React 18 + TypeScript + Vite app.
+
+Main areas:
+
+- [frontend/src/App.tsx](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/frontend/src/App.tsx): app shell, tabs, health polling, dashboard/log refresh logic
+- [frontend/src/hooks/useChat.ts](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/frontend/src/hooks/useChat.ts): chat request lifecycle and message persistence
+- [frontend/src/hooks/useAdmin.ts](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/frontend/src/hooks/useAdmin.ts): mode and metrics loading
+- [frontend/src/services/api.ts](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/frontend/src/services/api.ts): backend client and shared header handling
+- `frontend/src/components/chat`: chat UI, prompt composer, response cards, RAG/tool badges
+- `frontend/src/components/dashboard`: metrics overview cards
+- `frontend/src/components/admin`: security-mode selector
+- `frontend/src/components/logs`: decision log table
+- `frontend/src/components/common`: shared layout, branding, and status components
+
+Frontend behavior:
+
+- stores chat messages in `localStorage`
+- uses `VITE_API_URL` to target the backend
+- uses `VITE_CLIENT_API_KEY` for every API request, including admin requests
+- polls `/health/` every 30 seconds
+- refreshes metrics on dashboard entry and after chat activity
+- renders decision records in the Logs tab, not raw event records
+
+Important frontend auth note:
+
+- the current frontend client has only one configured API key value
+- if you set `ADMIN_API_KEY` to something different from `CLIENT_API_KEY`, the current frontend admin views will fail until the client is updated to send the admin key for admin routes
+
+## API Contracts
+
+### Chat Request
+
+`POST /chat/`
 
 ```json
 {
   "user_id": "demo-user",
+  "conversation_id": "optional-uuid",
   "prompt": "Summarize the attached PDF",
   "attachments": [
     {
@@ -199,80 +319,111 @@ Important limitation:
       "content_b64": "<base64>"
     }
   ],
-  "requested_tools": ["file_reader"]
+  "requested_tools": ["file_reader"],
+  "rag_enabled": true,
+  "rag_scope": "default",
+  "rag_document_ids": ["security_playbook"]
 }
 ```
 
-Successful responses include:
+`rag_scope` supports:
 
-- decision and risk level
-- trace ID
-- tool request / allow results
-- RAG usage flags
-- attachment analysis results
-- whether the model was called
+- `default`
+- `static_only`
+- `user_uploads_only`
+
+### Chat Response
+
+The response model includes:
+
+- decision fields: `decision`, `risk_level`, `reason`
+- trace and identity fields: `trace_id`, `user_id`, `conversation_id`
+- memory fields: `memory_used`, `memory_turns_loaded`, `memory_chars_loaded`, `memory_truncated`
+- tool fields: `tools_requested`, `tools_allowed`, `tool_decisions`
+- RAG fields: `rag_context_used`, `rag_context_validated`, `rag_retrieval_attempted`, `rag_sources_considered`, `rag_chunks_retrieved`, `rag_chunks_used`, `rag_chunks_dropped`, `rag_sources_used`, `rag_warnings`
+- attachment fields: `attachments_received`, `attachments_flagged`, `attachment_results`
+- execution fields: `model_called`, `timestamp`
+- compact signal data: `signals`
 
 ### Error Behavior
 
-Authentication failures:
+- `401`: missing or invalid API key
+- `403`: conversation ownership violation
+- `404`: conversation or evaluation record not found, or invalid conversation target
+- `429`: rate limit, quota, or concurrency rejection
+- `500`: internal processing failure
+- `504`: chat processing timeout
 
-- `401` when `X-API-Key` is missing or invalid
+## Metrics and Admin Observability
 
-Volume/overload failures:
+Admin metrics aggregate several kinds of state:
 
-- `429` for rate limits, quotas, or chat capacity exhaustion
-- `504` for chat processing timeouts
-
-## Admin Metrics and Logs
-
-The backend maintains in-memory events and decisions and exposes them through admin routes.
-
-Current metrics include:
-
-- total chat traces
+- chat trace counts
 - decision distribution
 - risk distribution
-- attack-success proxy
-- false-positive proxy
-- abuse-protection limits
-- active in-flight requests
-- recent rejections
-- cumulative rejection totals
+- evaluation metrics and pending reviews
+- RAG status and source counts
+- abuse-protection limits and live counters
 - active and recent spike alerts
 
-Current log/event categories include:
+Admin event streams include entries such as:
 
-- chat requests
-- risk scoring
-- tool checks
-- RAG checks
-- attachment checks
-- timeout events
-- rate limit and quota rejections
-- concurrency rejections
-- spike alerts
+- `chat_request`
+- `attachments_checked`
+- `steganography_checked`
+- `rag_checked`
+- `tool_checked`
+- `risk_scored`
+- `chat_timeout`
+- `rate_limit_rejected`
+- `quota_rejected`
+- `concurrency_rejected`
+- `traffic_spike_alert`
+- `conversation_memory_error`
+- `error`
 
-## Frontend Behavior
+Decision records are paginated separately from raw events.
 
-The frontend is a thin client over the backend API.
+## Repository Structure
 
-What it currently supports:
-
-- sending prompts to `/chat/`
-- selecting requested tools in the UI
-- attaching files and images and sending them as base64 payloads
-- switching the global security mode
-- showing KPI cards from `/admin/metrics`
-- showing recent decision records from `/admin/decisions`
-- polling health status
-
-Important frontend note:
-
-- the `Logs` tab currently renders decision records, not raw `/admin/events` entries
+```text
+backend/
+  app/
+    api/
+      dependencies/
+      routes/
+    controller/
+    core/
+    data/
+      rag/
+        benign/
+        poisoned/
+        trusted/
+    models/
+    services/
+    utils/
+  data/
+    chat_memory.sqlite
+    evaluation.sqlite
+  tests/
+    attacks/
+frontend/
+  src/
+    components/
+      admin/
+      chat/
+      common/
+      dashboard/
+      logs/
+    hooks/
+    services/
+README.md
+requirements.txt
+```
 
 ## Local Setup
 
-## 1. Backend
+### Backend
 
 Install Python dependencies:
 
@@ -280,7 +431,7 @@ Install Python dependencies:
 pip install -r requirements.txt
 ```
 
-Create `.env` from the example:
+Create a local env file:
 
 ```bash
 copy .env.example .env
@@ -292,52 +443,59 @@ Run the backend:
 uvicorn backend.app.main:app --reload
 ```
 
-Backend default URL:
+Backend URLs:
 
-```text
-http://localhost:8000
-```
+- app: `http://localhost:8000`
+- Swagger docs: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
 
-Swagger / OpenAPI:
+### Frontend
 
-```text
-http://localhost:8000/docs
-```
-
-## 2. Frontend
-
-Install frontend dependencies:
+Install dependencies:
 
 ```bash
 cd frontend
 npm install
 ```
 
-Run the frontend:
+Run the dev server:
 
 ```bash
 npm run dev
 ```
 
-Typical frontend dev URL:
+Typical frontend URL:
 
-```text
-http://localhost:5173
-```
+- `http://localhost:5173`
 
 ## Environment Variables
 
-Current backend `.env` surface from `.env.example`:
+The backend supports more settings than the current `.env.example` documents. The source of truth is [backend/app/core/config.py](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/backend/app/core/config.py).
+
+### Model and Auth
 
 ```env
 HF_MODEL_NAME=microsoft/DialoGPT-medium
 HF_PROVIDER=
-API_KEY=your_hugging_face_token_here
-CLIENT_API_KEY=choose_a_separate_client_api_key_here
-LOG_LEVEL=INFO
+HF_FALLBACK_PROVIDERS=novita
+HF_REQUEST_TIMEOUT_SECONDS=20
+API_KEY=
+CLIENT_API_KEY=
+ADMIN_API_KEY=
+```
+
+### Server and Logging
+
+```env
 HOST=0.0.0.0
 PORT=8000
 DEBUG=true
+LOG_LEVEL=INFO
+```
+
+### Core Security and Traffic Guard
+
+```env
 DEFAULT_SECURITY_MODE=Normal
 MAX_PROMPT_LENGTH=10000
 ENABLE_METRICS_LOGGING=true
@@ -350,79 +508,120 @@ ENABLE_USER_QUOTAS=false
 USER_QUOTA_PER_MINUTE=20
 USER_QUOTA_PER_DAY=500
 CHAT_MAX_IN_FLIGHT=8
-CHAT_REQUEST_TIMEOUT_SECONDS=12
+CHAT_REQUEST_TIMEOUT_SECONDS=30
 SPIKE_ALERT_WINDOW_SECONDS=60
 SPIKE_ALERT_THRESHOLD_REQUESTS=50
 SPIKE_ALERT_COOLDOWN_SECONDS=300
 ```
 
-Frontend expects:
+### RAG and Embeddings
 
-- `VITE_API_URL`
-- `VITE_CLIENT_API_KEY`
-
-## Model Behavior
-
-The backend can operate in two modes:
-
-- real backend mode when `API_KEY` is configured for Hugging Face Router
-- deterministic fallback mode when no backend key is present
-
-The deterministic fallback is intentional and helps keep evaluation/test output stable.
-
-## Test Coverage
-
-The backend test suite currently covers:
-
-- auth behavior
-- security decisions across modes
-- sanitize flow
-- tool authorization and deterministic tool execution
-- attachment extraction and prompt-injection detection through attachments
-- abuse protection and volume controls
-- Swagger/manual red-team policy expectations
-- bulk attack corpus execution
-
-Recent verification in this workspace:
-
-- `pytest backend/tests -q`
-- result: `90 passed`
-
-## Known Limitations
-
-- Abuse protection is in-memory and single-instance only
-- Admin routes are not protected by separate admin authentication
-- The frontend logs view shows decision records rather than the raw event stream
-- Web tool execution is restricted to a tiny allowlist
-- Database access is a seeded in-memory demo data source, not a production data layer
-- Write-file and command-execution tools are intentionally disabled
-
-## Repository Structure
-
-```text
-backend/
-  app/
-    api/
-    controller/
-    core/
-    data/
-    models/
-    services/
-    utils/
-  tests/
-frontend/
-  src/
-README.md
-requirements.txt
+```env
+VECTOR_DB_PROVIDER=qdrant
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION_NAME=rag_chunks
+QDRANT_API_KEY=
+RAG_ENABLED=true
+RAG_TOP_K=8
+RAG_MAX_CHUNKS_TO_MODEL=3
+RAG_MAX_CHUNKS_PER_SOURCE=2
+RAG_MAX_CONTEXT_CHARS=4000
+RAG_ENABLE_UPLOAD_INDEXING=true
+RAG_UPLOAD_TTL_SECONDS=86400
+RAG_QUARANTINE_ON_POISON_SCAN=true
+EMBEDDING_PROVIDER=local
+EMBEDDING_MODEL_NAME=local-hash-embedding-v1
+EMBEDDING_BATCH_SIZE=16
+EMBEDDING_TIMEOUT_SECONDS=5
+EMBEDDING_DIMENSION=128
 ```
 
-## Purpose
+### Conversation Memory and Evaluation Storage
 
-This repository is best understood as a protected-chat demo and evaluation environment rather than a finished production platform. It is useful for:
+```env
+MEMORY_ENABLED=true
+MEMORY_DB_PATH=backend/data/chat_memory.sqlite
+EVAL_DB_PATH=backend/data/evaluation.sqlite
+MEMORY_MAX_TURNS_TO_MODEL=12
+MEMORY_MAX_CONTEXT_CHARS=6000
+MEMORY_INCLUDE_BLOCKED=true
+MEMORY_INCLUDE_SANITIZED=true
+```
 
-- red-team exercises
-- security-mode comparisons
-- attachment attack experiments
-- RAG poisoning demonstrations
-- testing tool-gating behavior
-- experimenting with lightweight volume-attack defenses
+### Frontend
+
+```env
+VITE_API_URL=http://localhost:8000
+VITE_CLIENT_API_KEY=
+```
+
+## Dependencies
+
+Python dependencies from [requirements.txt](/abs/path/c:/Users/royce/CYBORGS%20PROJECT/CyborgsProtectedLLM/requirements.txt):
+
+- `fastapi`
+- `uvicorn[standard]`
+- `pydantic`
+- `python-dotenv`
+- `pytest`
+- `httpx`
+- `Pillow`
+- `pymupdf`
+- `rapidocr-onnxruntime`
+- `qdrant-client`
+
+Frontend dependencies include React 18, TypeScript, Vite, Tailwind CSS, and `lucide-react`.
+
+## Testing and Verification
+
+Backend tests in `backend/tests/` cover:
+
+- auth behavior
+- health endpoint behavior
+- defense-controller sanitization
+- prompt-injection policy behavior across modes
+- attachment extraction and prompt-injection detection
+- tool authorization and deterministic tool execution
+- database demo-tool behavior
+- conversation-memory persistence and admin retrieval
+- evaluation-store review flows
+- abuse-protection metrics and rejection logging
+- RAG indexing, retrieval, and quarantine behavior
+- Swagger-style red-team policy assertions
+- attack-corpus bulk execution
+
+Verification run in this workspace on April 22, 2026:
+
+- `pytest backend/tests -q`
+  Result: `50 passed`, `72 failed`
+  Primary failure pattern: admin endpoints now require an admin API key, while many tests still call `/admin/*` without the required header and receive `401 Invalid or missing admin API key`.
+- `npm run build` in `frontend/`
+  Result: failed in this sandbox with `Error: spawn EPERM` while Vite/esbuild attempted to start a child process
+
+## Known Limitations and Current Gaps
+
+- The system is not production hardened; it is a local evaluation/demo environment.
+- Traffic protection, vector search state, and metrics are in-memory and single-instance.
+- The vector store is Qdrant-shaped but currently implemented as an in-memory compatible backend.
+- The embedding system is deterministic local hashing, not a semantic embedding service backed by a model provider.
+- The frontend currently uses one API key for both chat and admin routes; separate admin auth requires frontend work.
+- The current `.env.example` does not list every supported environment variable from `config.py`.
+- The Logs tab shows decision records, not the raw event stream from `/admin/events`.
+- Tool coverage is intentionally narrow and heavily restricted.
+- `write_file` and `execute_command` are intentionally disabled by policy.
+- The `web` tool is limited to an allowlist intended for demo use.
+- The `database` tool is a seeded in-memory demo dataset, not an application database.
+- The backend CORS policy currently allows all origins.
+- Several backend tests are currently out of sync with the stricter admin-auth requirement.
+
+## Intended Use Cases
+
+This repository is useful for:
+
+- prompt-injection defense demos
+- RAG poisoning and quarantine experiments
+- attachment-security testing
+- tool-gating experiments
+- red-team or policy-regression exercises
+- evaluation workflows using labeled attack/benign review data
+- demonstrating lightweight volume-attack protections around an LLM gateway

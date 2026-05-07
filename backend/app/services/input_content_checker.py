@@ -125,6 +125,11 @@ class InputContentChecker:
         # Compile regex patterns
         self.compiled_injection = [re.compile(pattern) for pattern in self.injection_patterns]
         self.compiled_suspicious = [re.compile(pattern) for pattern in self.suspicious_patterns]
+        self.compiled_flag_prompt_patterns = [
+            re.compile(r"(?i)\bflag\{[^}]+\}"),
+            re.compile(r"(?i)\bcapture the flag\b"),
+            re.compile(r'(?i)\b(?:reveal|show|display|print|give)\s+(?:me\s+)?(?:the\s+)?flag\b'),
+        ]
     
     async def analyze(self, prompt: str) -> Dict[str, Any]:
         """Analyze prompt and return structured signals"""
@@ -153,6 +158,14 @@ class InputContentChecker:
                 print(f"DEBUG: Injection pattern {i} matched: {matches}")
                 injection_matches.extend(matches)
                 signals["pattern_hits"].append(f"injection_pattern_{i}")
+                signals["prompt_injection_suspected"] = True
+
+        for i, pattern in enumerate(self.compiled_flag_prompt_patterns):
+            matches = pattern.findall(prompt)
+            if matches:
+                print(f"DEBUG: Flag prompt pattern {i} matched: {matches}")
+                injection_matches.extend(matches)
+                signals["pattern_hits"].append(f"flag_prompt_pattern_{i}")
                 signals["prompt_injection_suspected"] = True
         
         # Check for suspicious patterns
@@ -239,6 +252,20 @@ class InputContentChecker:
                     details={
                         "pattern": self.injection_patterns[i],
                         "matches": matches[:3]  # Limit to first 3 matches
+                    }
+                ))
+
+        for i, pattern in enumerate(self.compiled_flag_prompt_patterns):
+            matches = pattern.findall(content)
+            if matches:
+                print(f"DEBUG: Flag prompt pattern {i} matched: {matches}")
+                injection_matches.extend(matches)
+                signals.append(SecuritySignal(
+                    signal_type="prompt_injection",
+                    confidence=0.8,
+                    details={
+                        "pattern": pattern.pattern,
+                        "matches": matches[:3]
                     }
                 ))
         

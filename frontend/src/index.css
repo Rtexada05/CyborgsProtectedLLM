@@ -3,62 +3,210 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
   html {
     font-size: 17px;
   }
 
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-cyber-950 text-cyber-200;
+    font-family: Bahnschrift, "Segoe UI", "Trebuchet MS", sans-serif;
     line-height: 1.6;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top left, rgba(78, 207, 255, 0.18), transparent 28%),
+      radial-gradient(circle at top right, rgba(35, 117, 163, 0.22), transparent 30%),
+      linear-gradient(180deg, #091321 0%, #06111f 52%, #050d18 100%);
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  * {
+    scrollbar-color: rgba(140, 223, 255, 0.35) rgba(6, 17, 31, 0.45);
   }
 }
 
 @layer components {
+  .app-shell {
+    @apply relative min-h-screen overflow-hidden bg-transparent text-cyber-200;
+  }
+
+  .app-shell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 20% 12%, rgba(110, 225, 255, 0.10), transparent 24%),
+      radial-gradient(circle at 78% 10%, rgba(55, 140, 182, 0.12), transparent 24%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.02), transparent 40%);
+    pointer-events: none;
+  }
+
+  .app-shell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(140, 223, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(140, 223, 255, 0.04) 1px, transparent 1px);
+    background-size: 34px 34px;
+    mask-image: linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent 70%);
+    pointer-events: none;
+  }
+
+  .content-shell {
+    @apply relative z-10 mx-auto flex h-full w-full max-w-7xl flex-col px-4 pb-6 sm:px-6 lg:px-8;
+  }
+
+  .content-panel {
+    @apply cyber-panel flex-1 overflow-hidden;
+  }
+
+  .cyber-panel {
+    @apply rounded-[28px] border border-cyan-400/20 bg-cyber-900/70 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl;
+  }
+
+  .cyber-panel-subtle {
+    @apply rounded-3xl border border-white/10 bg-cyber-900/50 shadow-[0_16px_40px_rgba(0,0,0,0.25)] backdrop-blur-md;
+  }
+
+  .cyber-card {
+    @apply rounded-2xl border border-cyan-300/10 bg-cyber-900/70 shadow-[0_10px_30px_rgba(0,0,0,0.2)] transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300/25;
+  }
+
+  .section-kicker {
+    @apply mb-2 text-xs font-semibold uppercase tracking-[0.35em] text-primary-300/80;
+  }
+
+  .page-title {
+    @apply text-3xl font-semibold tracking-[0.06em] text-white sm:text-4xl;
+  }
+
+  .page-description {
+    @apply mt-2 max-w-2xl text-sm leading-7 text-cyber-300 sm:text-base;
+  }
+
+  .page-header {
+    @apply mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between;
+  }
+
+  .glass-button {
+    @apply inline-flex items-center justify-center rounded-xl border border-primary-400/30 bg-primary-500/10 px-4 py-2.5 text-sm font-medium text-primary-200 transition hover:border-primary-300/50 hover:bg-primary-500/25 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-cyber-400;
+  }
+
+  .status-pill {
+    @apply inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.2em];
+  }
+
   .decision-badge {
-    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+    @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium;
   }
   
   .decision-allow {
-    @apply bg-success-100 text-success-800 border border-success-200;
+    @apply border-success-400/20 bg-success-500/10 text-success-200;
   }
   
   .decision-sanitize {
-    @apply bg-warning-100 text-warning-800 border border-warning-200;
+    @apply border-warning-400/20 bg-warning-500/10 text-warning-100;
   }
   
   .decision-block {
-    @apply bg-danger-100 text-danger-800 border border-danger-200;
+    @apply border-danger-400/20 bg-danger-500/10 text-danger-100;
   }
   
   .risk-low {
-    @apply bg-success-50 text-success-700;
+    @apply border border-success-400/20 bg-success-500/10 text-success-200;
   }
   
   .risk-medium {
-    @apply bg-warning-50 text-warning-700;
+    @apply border border-warning-400/20 bg-warning-500/10 text-warning-100;
   }
   
   .risk-high {
-    @apply bg-danger-50 text-danger-700;
+    @apply border border-danger-400/20 bg-danger-500/10 text-danger-100;
   }
   
   .risk-critical {
-    @apply bg-danger-100 text-danger-800 font-semibold;
+    @apply border border-danger-300/30 bg-danger-500/20 font-semibold text-danger-100;
   }
   
   .metric-card {
-    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+    @apply cyber-card p-6;
   }
   
   .chat-message {
-    @apply max-w-4xl rounded-lg p-5;
+    @apply max-w-4xl rounded-3xl border p-5 shadow-[0_12px_34px_rgba(0,0,0,0.18)];
   }
   
   .user-message {
-    @apply bg-primary-50 border border-primary-200 ml-auto;
+    @apply ml-auto border-primary-300/30 bg-primary-500/10 text-cyber-100;
   }
   
   .assistant-message {
-    @apply bg-gray-100 border border-gray-200;
+    @apply border-white/10 bg-white/5 text-cyber-100;
+  }
+
+  .system-message {
+    @apply border-warning-300/25 bg-warning-500/10 text-warning-50;
+  }
+
+  .subtle-panel {
+    @apply rounded-2xl border border-white/10 bg-white/5 p-4;
+  }
+
+  .cyber-input {
+    @apply rounded-2xl border border-white/10 bg-cyber-950/85 px-4 py-3 text-base leading-7 text-cyber-100 placeholder:text-cyber-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .cyber-chip {
+    @apply rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-cyber-200 transition hover:border-primary-300/30 hover:bg-primary-500/10;
+  }
+
+  .table-header-cell {
+    @apply px-6 py-4 text-left text-[11px] font-semibold uppercase tracking-[0.25em] text-cyber-400;
+  }
+
+  .table-cell {
+    @apply px-6 py-4 text-sm text-cyber-100;
+  }
+
+  .animate-enter {
+    animation: enter-fade 420ms ease-out both;
+  }
+
+  .message-content {
+    @apply space-y-4;
+  }
+
+  .message-paragraph {
+    @apply leading-8 text-cyber-100;
+  }
+
+  .message-list {
+    @apply space-y-2 pl-6 leading-8 text-cyber-100;
+  }
+
+  .message-list-ordered {
+    @apply list-decimal;
+  }
+
+  .message-list-unordered {
+    @apply list-disc;
+  }
+}
+
+@keyframes enter-fade {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

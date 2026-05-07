@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Check, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Check, Database } from 'lucide-react';
 
 interface RAGStatusBadgeProps {
   used: boolean;
@@ -9,7 +9,7 @@ interface RAGStatusBadgeProps {
 export const RAGStatusBadge: React.FC<RAGStatusBadgeProps> = ({ used, validated }) => {
   if (!used) {
     return (
-      <span className="inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-cyber-200">
         <Database className="h-3 w-3" />
         <span>No RAG</span>
       </span>
@@ -22,10 +22,10 @@ export const RAGStatusBadge: React.FC<RAGStatusBadgeProps> = ({ used, validated 
   };
 
   const getValidationClass = () => {
-    if (validated === undefined) return 'bg-blue-100 text-blue-800 border border-blue-200';
-    return validated 
-      ? 'bg-success-100 text-success-800 border border-success-200'
-      : 'bg-warning-100 text-warning-800 border border-warning-200';
+    if (validated === undefined) return 'border border-primary-400/20 bg-primary-500/15 text-primary-100';
+    return validated
+      ? 'border border-success-400/20 bg-success-500/15 text-success-100'
+      : 'border border-warning-400/20 bg-warning-500/15 text-warning-100';
   };
 
   const getValidationText = () => {
@@ -34,7 +34,7 @@ export const RAGStatusBadge: React.FC<RAGStatusBadgeProps> = ({ used, validated 
   };
 
   return (
-    <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getValidationClass()}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${getValidationClass()}`}>
       <Database className="h-3 w-3" />
       <span>{getValidationText()}</span>
       {getValidationIcon()}

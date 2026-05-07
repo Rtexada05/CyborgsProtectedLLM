@@ -23,41 +23,40 @@ export const SecurityModeSelector: React.FC<SecurityModeSelectorProps> = ({
       mode: 'Off',
       label: 'Off',
       description: 'No protection applied. All requests allowed.',
-      color: 'bg-gray-100 text-gray-800 border-gray-300',
+      color: 'border-white/10 bg-white/10 text-cyber-200',
       impact: 'No security filtering'
     },
     {
       mode: 'Weak',
       label: 'Weak',
       description: 'Basic input validation only.',
-      color: 'bg-blue-100 text-blue-800 border-blue-300',
+      color: 'border-primary-400/20 bg-primary-500/15 text-primary-100',
       impact: 'Minimal filtering'
     },
     {
       mode: 'Normal',
       label: 'Normal',
       description: 'Standard protection with policy enforcement.',
-      color: 'bg-warning-100 text-warning-800 border-warning-300',
+      color: 'border-warning-400/20 bg-warning-500/15 text-warning-100',
       impact: 'Balanced security'
     },
     {
       mode: 'Strong',
       label: 'Strong',
       description: 'Maximum security with strict validation.',
-      color: 'bg-danger-100 text-danger-800 border-danger-300',
+      color: 'border-danger-400/20 bg-danger-500/15 text-danger-100',
       impact: 'Most restrictive'
     }
   ];
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Security Mode Configuration</h3>
-      
-      {/* Current Mode Display */}
+    <div className="cyber-panel-subtle p-6">
+      <h3 className="mb-4 text-lg font-semibold text-white">Security Mode Configuration</h3>
+
       <div className="mb-6">
-        <div className="flex items-center space-x-3">
-          <span className="text-sm font-medium text-gray-700">Current Mode:</span>
-          <div className={`px-3 py-1 rounded-full text-sm font-medium border ${
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium uppercase tracking-[0.2em] text-cyber-400">Current Mode</span>
+          <div className={`rounded-full border px-3 py-1 text-sm font-medium ${
             modes.find(m => m.mode === currentMode)?.color
           }`}>
             {currentMode}
@@ -65,62 +64,60 @@ export const SecurityModeSelector: React.FC<SecurityModeSelectorProps> = ({
         </div>
       </div>
 
-      {/* Mode Selection */}
       <div className="space-y-3">
-        <p className="text-sm font-medium text-gray-700">Select Security Mode:</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyber-400">Select Security Mode</p>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {modes.map((mode) => (
             <button
               key={mode.mode}
               onClick={() => onModeChange(mode.mode)}
               disabled={isLoading || mode.mode === currentMode}
               className={`
-                p-4 rounded-lg border-2 text-left transition-all
+                rounded-2xl border p-4 text-left transition-all
                 ${currentMode === mode.mode
-                  ? 'border-primary-500 bg-primary-50'
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  ? 'border-primary-300/45 bg-primary-500/14 shadow-[0_0_35px_rgba(78,207,255,0.12)]'
+                  : 'border-white/10 bg-white/5 hover:border-primary-300/20 hover:bg-primary-500/8'
                 }
-                ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}
+                ${isLoading ? 'cursor-not-allowed opacity-50' : ''}
                 ${mode.mode === currentMode ? 'cursor-default' : ''}
               `}
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className={`px-2 py-1 rounded text-sm font-medium ${mode.color}`}>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className={`rounded-full border px-2.5 py-1 text-sm font-medium ${mode.color}`}>
                   {mode.label}
                 </div>
                 {currentMode === mode.mode && (
-                  <span className="text-xs text-primary-600 font-medium">Active</span>
+                  <span className="text-xs font-medium uppercase tracking-[0.2em] text-primary-200">Active</span>
                 )}
               </div>
-              <p className="text-sm text-gray-600 mb-1">{mode.description}</p>
-              <p className="text-xs text-gray-500 font-medium">{mode.impact}</p>
+              <p className="mb-1 text-sm text-cyber-200">{mode.description}</p>
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-cyber-400">{mode.impact}</p>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Security Level Indicator */}
-      <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-        <h4 className="text-sm font-semibold text-gray-700 mb-3">Security Level Impact</h4>
+      <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <h4 className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-cyber-300">Security Level Impact</h4>
         <div className="space-y-2 text-xs">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-success-500 rounded-full"></div>
-            <span className="text-gray-600">Low Risk: Basic queries, calculations</span>
+          <div className="flex items-center gap-2">
+            <div className="h-3 w-3 rounded-full bg-success-400"></div>
+            <span className="text-cyber-300">Low Risk: Basic queries, calculations</span>
           </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-warning-500 rounded-full"></div>
-            <span className="text-gray-600">Medium Risk: Role manipulation, suspicious patterns</span>
+          <div className="flex items-center gap-2">
+            <div className="h-3 w-3 rounded-full bg-warning-400"></div>
+            <span className="text-cyber-300">Medium Risk: Role manipulation, suspicious patterns</span>
           </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-danger-500 rounded-full"></div>
-            <span className="text-gray-600">High/Critical Risk: Injection attempts, tool abuse</span>
+          <div className="flex items-center gap-2">
+            <div className="h-3 w-3 rounded-full bg-danger-400"></div>
+            <span className="text-cyber-300">High/Critical Risk: Injection attempts, tool abuse</span>
           </div>
         </div>
       </div>
 
       {isLoading && (
-        <div className="mt-4 text-sm text-gray-600 flex items-center space-x-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+        <div className="mt-4 flex items-center gap-2 text-sm text-cyber-300">
+          <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-400"></div>
           <span>Updating security mode...</span>
         </div>
       )}

@@ -182,3 +182,7 @@ frontend/dist/
 frontend/.vite/
 frontend/.env
 frontend/.env.local
+
+# Local delivery artifacts and binaries
+CyborgsProtectedLLM_Delivery.zip
+cloudflared.exe

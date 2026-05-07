@@ -2,6 +2,7 @@
 Metrics Logger - logs events and metrics for monitoring
 """
 
+import math
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
 import asyncio
@@ -15,6 +16,7 @@ class MetricsLogger:
         # In-memory storage for events (in production, use proper logging/database)
         self.events = deque(maxlen=5000)  # Keep a larger session history for red-team exercises
         self.decisions = deque(maxlen=5000)
+        self.chat_attempt_trace_ids_seen = set()
         self.trace_ids_seen = set()
         self.start_time = datetime.now()
         self._lock = asyncio.Lock()
@@ -49,7 +51,7 @@ class MetricsLogger:
                 risk_distribution[risk_level] = 0
             risk_distribution[risk_level] += 1
 
-        total_requests = len(self.trace_ids_seen)
+        total_requests = len(self.chat_attempt_trace_ids_seen) or len(self.trace_ids_seen)
 
         return {
             "total_requests": total_requests,
@@ -68,8 +70,15 @@ class MetricsLogger:
 
         self.events.clear()
         self.decisions.clear()
+        self.chat_attempt_trace_ids_seen.clear()
         self.trace_ids_seen.clear()
         self.start_time = datetime.now()
+
+    async def log_chat_attempt(self, trace_id: str) -> None:
+        """Track every inbound chat attempt, even when no decision record is written."""
+
+        async with self._lock:
+            self.chat_attempt_trace_ids_seen.add(trace_id)
 
     async def log_event(self, event_type: str, trace_id: str, user_id: str, details: Dict[str, Any]):
         """Log an event with trace tracking"""
@@ -113,6 +122,7 @@ class MetricsLogger:
                 decision_record.update(extra)
 
             self.decisions.append(decision_record)
+            self.chat_attempt_trace_ids_seen.add(trace_id)
             self.trace_ids_seen.add(trace_id)
     
     async def get_events(self, limit: int = 50) -> List[Dict[str, Any]]:
@@ -135,21 +145,34 @@ class MetricsLogger:
                 for event in recent_events
             ]
     
-    async def get_decisions(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """Get recent decisions"""
-        
-        async with self._lock:
-            # Get most recent decisions
-            recent_decisions = list(self.decisions)[-limit:]
-            recent_decisions.reverse()
+    async def get_decisions(self, page: int = 1, limit: int = 10) -> Dict[str, Any]:
+        """Get paginated decisions ordered from newest to oldest."""
 
-            return [
-                {
-                    **decision,
-                    "timestamp": self._serialize_timestamp(decision.get("timestamp"))
-                }
-                for decision in recent_decisions
-            ]
+        async with self._lock:
+            ordered_decisions = list(self.decisions)
+            ordered_decisions.reverse()
+
+            total_decisions = len(ordered_decisions)
+            total_pages = max(1, math.ceil(total_decisions / limit))
+            start_index = (page - 1) * limit
+            end_index = start_index + limit
+            paginated_decisions = ordered_decisions[start_index:end_index]
+
+            return {
+                "decisions": [
+                    {
+                        **decision,
+                        "timestamp": self._serialize_timestamp(decision.get("timestamp"))
+                    }
+                    for decision in paginated_decisions
+                ],
+                "total_decisions": total_decisions,
+                "page": page,
+                "limit": limit,
+                "total_pages": total_pages,
+                "has_previous": page > 1,
+                "has_next": page < total_pages,
+            }
     
     async def get_recent_events(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Get recent events"""
@@ -206,19 +229,11 @@ class MetricsLogger:
         total_requests = base_metrics["total_requests"]
         total_decisions = len(self.decisions)
 
-        attack_success_rate = round(
-            (base_metrics["allowed_requests"] / total_requests * 100) if total_requests > 0 else 0,
-            2,
-        )
-        false_positive_proxy_rate = round(
-            (base_metrics["blocked_requests"] / total_requests * 100) if total_requests > 0 else 0,
-            2,
-        )
-
         payload = {
             "traffic": {
                 "total_chat_traces": total_requests,
                 "total_decision_records": total_decisions,
+                "requests_without_decision_record": max(total_requests - total_decisions, 0),
                 "requests_per_hour": base_metrics["requests_per_hour"],
             },
             "decisions": {
@@ -232,13 +247,6 @@ class MetricsLogger:
                 "high_risk_rate_percent": base_metrics["high_risk_rate_percent"],
                 "medium_risk_rate_percent": base_metrics["medium_risk_rate_percent"],
                 "low_risk_rate_percent": base_metrics["low_risk_rate_percent"],
-            },
-            "kpis": {
-                "attack_success_rate_percent": attack_success_rate,
-                "false_positive_proxy_percent": false_positive_proxy_rate,
-                "throughput_rps_placeholder": None,
-                "latency_p50_ms_placeholder": None,
-                "latency_p95_ms_placeholder": None,
             },
             "generated_at": datetime.now().isoformat(),
         }

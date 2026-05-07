@@ -18,6 +18,17 @@ async def require_client_api_key(x_api_key: Optional[str] = Header(default=None,
     return x_api_key
 
 
+async def require_admin_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> str:
+    """Strict API key validation for admin routes, with fallback to the client key."""
+    expected_key = settings.ADMIN_API_KEY or settings.CLIENT_API_KEY
+    if not expected_key or not x_api_key or x_api_key != expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing admin API key",
+        )
+    return x_api_key
+
+
 def get_client_ip(request: Request) -> str:
     """Resolve the client IP, optionally honoring trusted proxy headers."""
 

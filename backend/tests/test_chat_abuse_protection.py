@@ -157,6 +157,83 @@ def test_admin_metrics_include_abuse_protection_sections(chat_headers):
     assert "rejections" in data["abuse_protection"]
 
 
+def test_metrics_count_rate_limited_attempts_without_decision_record(chat_headers, monkeypatch):
+    client = TestClient(app)
+    monkeypatch.setattr(settings, "RATE_LIMIT_IP_PER_MINUTE", 1)
+    monkeypatch.setattr(settings, "RATE_LIMIT_API_KEY_PER_MINUTE", 10)
+
+    first = client.post("/chat/", headers=chat_headers, json=_payload("metrics-ok"))
+    second = client.post("/chat/", headers=chat_headers, json=_payload("metrics-rate-limited"))
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+
+    metrics = client.get("/admin/metrics")
+    assert metrics.status_code == 200
+    data = metrics.json()
+
+    assert data["traffic"]["total_chat_traces"] == 2
+    assert data["traffic"]["total_decision_records"] == 1
+    assert data["traffic"]["requests_without_decision_record"] == 1
+
+
+def test_unauthorized_chat_attempt_still_gets_tracked_and_tagged():
+    client = TestClient(app)
+
+    response = client.post("/chat/", json=_payload("unauthorized-user"))
+
+    assert response.status_code == 401
+    assert response.headers["X-Trace-Id"]
+
+    metrics = client.get("/admin/metrics")
+    assert metrics.status_code == 200
+    data = metrics.json()
+
+    assert data["traffic"]["total_chat_traces"] == 1
+    assert data["traffic"]["total_decision_records"] == 0
+    assert data["traffic"]["requests_without_decision_record"] == 1
+
+
+def test_cors_preflight_does_not_count_as_chat_attempt(chat_headers):
+    client = TestClient(app)
+
+    preflight = client.options(
+        "/chat/",
+        headers={
+            "Origin": "https://redteam.example",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type,x-api-key",
+        },
+    )
+    assert preflight.status_code == 200
+
+    post = client.post("/chat/", headers=chat_headers, json=_payload("preflight-user"))
+    assert post.status_code == 200
+
+    metrics = client.get("/admin/metrics")
+    assert metrics.status_code == 200
+    data = metrics.json()
+
+    assert data["traffic"]["total_chat_traces"] == 1
+    assert data["traffic"]["total_decision_records"] == 1
+    assert data["traffic"]["requests_without_decision_record"] == 0
+
+
+def test_chat_without_trailing_slash_does_not_double_count(chat_headers):
+    client = TestClient(app)
+
+    response = client.post("/chat", headers=chat_headers, json=_payload("redirect-user"))
+    assert response.status_code == 200
+
+    metrics = client.get("/admin/metrics")
+    assert metrics.status_code == 200
+    data = metrics.json()
+
+    assert data["traffic"]["total_chat_traces"] == 1
+    assert data["traffic"]["total_decision_records"] == 1
+    assert data["traffic"]["requests_without_decision_record"] == 0
+
+
 def test_rejection_events_do_not_log_raw_api_key(chat_headers, monkeypatch):
     client = TestClient(app)
     monkeypatch.setattr(settings, "RATE_LIMIT_IP_PER_MINUTE", 1)
